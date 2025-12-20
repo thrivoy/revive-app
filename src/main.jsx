@@ -1,14 +1,14 @@
-import './index.css';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { motion, useAnimation } from 'framer-motion';
 import Papa from 'papaparse';
+import './index.css'; // Ensure this is here for styling!
 import { 
   Phone, Upload, UserPlus, ArrowLeft, ClipboardPaste, 
   Trash2, Zap, ScanLine, Settings, List, Plus, X, 
   Wand2, HelpCircle, Gift, Info, CheckSquare, Square, 
   Play, UserMinus, Mail, Clock, Flame, ThumbsUp, 
-  Snowflake, UserCheck 
+  Snowflake, UserCheck, ShieldCheck 
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR DEPLOYMENT URL HERE
