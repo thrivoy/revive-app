@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbwMtvw1hej1QhH6bl7hRMDJxDgkTpc577sikht7fwCKw0sbZh4Yy9GqEnfxhTeKcf6bsQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwdToQjvNZZ5cl7K-pbyOEWh9RAdgbzl6--VYvcVHVD_4AZK7SqyV1j2sM2IMFTYPSTJg/exec";
 
 const ADMIN_KEY = "master";
 
