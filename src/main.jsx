@@ -526,7 +526,7 @@ function ManualForm({ onBack, onSubmit, status }) {
 }
 
 // ==========================================
-// 5. CAMERA SCAN
+// 5. CAMERA SCAN (Fixed: Success Alert)
 // ==========================================
 function CameraScan({ onBack, onSubmit }) {
     const fileInputRef = useRef(null);
@@ -549,15 +549,27 @@ function CameraScan({ onBack, onSubmit }) {
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
                 const base64 = dataUrl.split(",")[1];
+                
                 fetch(API_URL, { 
                     method: 'POST', 
                     body: JSON.stringify({ action: "AI_ANALYZE_IMAGE", payload: { image: base64 } }) 
                 })
                 .then(r => r.json())
                 .then(json => { 
-                    if(json.data) onSubmit([json.data]); 
-                    else alert("Could not scan card."); 
-                    setLoading(false); 
+                    setLoading(false);
+                    if(json.data) {
+                        // ✅ VISUAL CONFIRMATION
+                        alert(`✅ Scanned: ${json.data.name || "Lead"}\n\nTap OK to save.`);
+                        // Handle both single object or array safely
+                        const lead = Array.isArray(json.data) ? json.data[0] : json.data;
+                        onSubmit([lead]);
+                    } else {
+                        alert("❌ Could not read card. Try again."); 
+                    }
+                })
+                .catch(err => {
+                    setLoading(false);
+                    alert("Error: " + err.message);
                 });
             };
             img.src = readerEvent.target.result;
@@ -567,13 +579,21 @@ function CameraScan({ onBack, onSubmit }) {
 
     return (
         <div className="h-screen bg-black flex flex-col items-center justify-center p-6 text-white text-center">
-            {loading ? ( <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-4"></div> ) : (
+            {loading ? ( 
+                <div className="flex flex-col items-center animate-in fade-in">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div>
+                    <h2 className="text-xl font-bold">Analysing Card...</h2>
+                    <p className="text-gray-400 text-sm mt-2">AI is extracting details.</p>
+                </div> 
+            ) : (
                 <>
                     <Camera size={64} className="mb-6 text-orange-500"/>
                     <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                    <p className="text-gray-400 mb-8">Take a photo. AI will type it for you.</p>
-                    <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4">Open Camera</button>
-                    <button onClick={onBack} className="text-gray-400">Cancel</button>
+                    <p className="text-gray-400 mb-8">Take a photo. AI will extract Name & Phone.</p>
+                    <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4 shadow-lg active:scale-95 transition-transform">
+                        Open Camera
+                    </button>
+                    <button onClick={onBack} className="text-gray-400 font-bold">Cancel</button>
                     <input type="file" ref={fileInputRef} accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
                 </>
             )}
