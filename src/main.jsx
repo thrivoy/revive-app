@@ -306,7 +306,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK
+// 3. CARD STACK (Crash-Proof Edition)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
     const [mode, setMode] = useState("card"); 
@@ -314,10 +314,14 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [file, setFile] = useState(null); 
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const controls = useAnimation(); 
-    const active = queue[0]; 
+    
+    // SAFETY CHECK: Filter out bad data
+    const validQueue = queue.filter(q => q && q.lead_id);
+    const active = validQueue[0]; 
 
-    if(queue.length === 0) return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
+    // If queue is empty (or became empty after filtering), show "All Caught Up"
+    if(!active) return (
+        <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
             <h2 className="text-2xl font-bold text-gray-800">All Caught Up!</h2>
             <button onClick={onBack} className="mt-8 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">Return to Menu</button>
@@ -329,15 +333,26 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     if(matched) activeTemplate = matched.text; 
     
     const [currentMessage, setCurrentMessage] = useState(
-        activeTemplate.replace("{{name}}", active.name).replace("{{context}}", active.context || "your update")
+        activeTemplate.replace("{{name}}", active.name || "").replace("{{context}}", active.context || "your update")
     );
     
     useEffect(() => {
-        setCurrentMessage(activeTemplate.replace("{{name}}", active.name).replace("{{context}}", active.context || "your update"));
-    }, [active.lead_id]);
+        if(active) {
+            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "").replace("{{context}}", active.context || "your update"));
+        }
+    }, [active?.lead_id]);
 
-    const updateActive = (field, value) => { const newQ = [...queue]; newQ[0][field] = value; setQueue(newQ); }; 
-    const removeCard = () => { setQueue(q => q.slice(1)); setMode("card"); setFile(null); }; 
+    const updateActive = (field, value) => { 
+        const newQ = [...queue]; 
+        if(newQ[0]) newQ[0][field] = value; 
+        setQueue(newQ); 
+    }; 
+    
+    const removeCard = () => { 
+        setQueue(q => q.slice(1)); 
+        setMode("card"); 
+        setFile(null); 
+    }; 
 
     const handleAiRewrite = async (tone, lang) => {
         setPolyglotMenu(false);
@@ -379,9 +394,8 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     
     const addToCalendar = (days) => { 
         const d = new Date(); d.setDate(d.getDate() + days); 
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+active.name)}&details=${encodeURIComponent(active.context)}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(active.context||"")}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
-        
         controls.start({ y: 500, opacity: 0 }).then(() => { 
             controls.set({ y: 0, opacity: 1 }); 
             fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); 
@@ -440,8 +454,8 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
                        <button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button>
                    </div>
                    <div className="shrink-0">
-                       <input value={active.name} onChange={(e) => updateActive('name', e.target.value)} className="text-3xl font-bold text-gray-800 w-full outline-none" />
-                       <div className="flex flex-col mt-1"><span className="text-gray-400 font-mono text-sm">+{active.phone}</span></div>
+                       <input value={active.name} onChange={(e) => updateActive('name', e.target.value)} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" />
+                       <div className="flex flex-col mt-1"><span className="text-gray-400 font-mono text-sm">+{active.phone || "0000000000"}</span></div>
                    </div>
                    
                    {actionType === 'whatsapp' ? (
@@ -526,7 +540,7 @@ function ManualForm({ onBack, onSubmit, status }) {
 }
 
 // ==========================================
-// 5. CAMERA SCAN (Fixed: Success Alert)
+// 5. CAMERA SCAN (Notification Fix)
 // ==========================================
 function CameraScan({ onBack, onSubmit }) {
     const fileInputRef = useRef(null);
@@ -558,13 +572,19 @@ function CameraScan({ onBack, onSubmit }) {
                 .then(json => { 
                     setLoading(false);
                     if(json.data) {
-                        // ✅ VISUAL CONFIRMATION
-                        alert(`✅ Scanned: ${json.data.name || "Lead"}\n\nTap OK to save.`);
-                        // Handle both single object or array safely
-                        const lead = Array.isArray(json.data) ? json.data[0] : json.data;
+                        // Data Normalization directly in frontend to be safe
+                        const raw = Array.isArray(json.data) ? json.data[0] : json.data;
+                        const lead = {
+                            name: raw.name || raw.Name || "Scanned Lead",
+                            phone: raw.phone || raw.Phone || "",
+                            email: raw.email || raw.Email || "",
+                            context: raw.context || raw.Context || "Card Scan"
+                        };
+                        
+                        alert(`✅ Scanned!\nName: ${lead.name}\nPhone: ${lead.phone}`);
                         onSubmit([lead]);
                     } else {
-                        alert("❌ Could not read card. Try again."); 
+                        alert("❌ AI couldn't read the card. Try again."); 
                     }
                 })
                 .catch(err => {
@@ -583,13 +603,13 @@ function CameraScan({ onBack, onSubmit }) {
                 <div className="flex flex-col items-center animate-in fade-in">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div>
                     <h2 className="text-xl font-bold">Analysing Card...</h2>
-                    <p className="text-gray-400 text-sm mt-2">AI is extracting details.</p>
+                    <p className="text-gray-400 text-sm mt-2">Extracting Name & Phone</p>
                 </div> 
             ) : (
                 <>
                     <Camera size={64} className="mb-6 text-orange-500"/>
                     <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                    <p className="text-gray-400 mb-8">Take a photo. AI will extract Name & Phone.</p>
+                    <p className="text-gray-400 mb-8">Take a photo. AI will extract details.</p>
                     <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4 shadow-lg active:scale-95 transition-transform">
                         Open Camera
                     </button>
