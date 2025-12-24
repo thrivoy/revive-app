@@ -12,14 +12,14 @@ import {
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-// ⚠️ PASTE NEW URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbwqGTzE2PT0oly-qHI5BPENy3l7HS-r1ZmvftOeF9jY-P8vMGQYew1spOgHoV3Z_bO2Ww/exec";
+// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbwuzKDomPJ2mxeZA_x58lzSQYPteQ_y_Krm-ZNDhJZSGoo2c4sztI8zNU3xlcaH8Hr4JA/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "AI Power Unlocked 🧠",
-    text: "AI now extracts Company Name & Email from business cards automatically!",
+    title: "System Status: Online 🟢",
+    text: "AI Engine upgraded to Gemini 2.5 Flash for faster, error-free scanning.",
     type: "info" 
 };
 
@@ -34,6 +34,7 @@ function App() {
   const [stats, setStats] = useState({ today: 0 });
   const [userProfile, setUserProfile] = useState(null); 
   const [status, setStatus] = useState("");
+  const [prefillData, setPrefillData] = useState(null); 
   
   const [template, setTemplate] = useState(() => localStorage.getItem("revive_active_template") || "Hi {{name}}, regarding {{context}}.");
   const [library, setLibrary] = useState(() => JSON.parse(localStorage.getItem("revive_library") || "[]"));
@@ -74,7 +75,7 @@ function App() {
         const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) });
         const json = await res.json();
         if(json.status === "error" && json.message === "LIMIT_REACHED") {
-            alert("🔒 LIMIT REACHED!\n\nYou have hit the 100 Lead Limit on the Free Plan.\nUpgrade to Pro to add more.");
+            alert("🔒 LIMIT REACHED!\n\nUpgrade to Pro to add more.");
             setStatus("");
         } else {
             setStatus("Saved!");
@@ -101,10 +102,10 @@ function App() {
   if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} onBack={() => { fetchQueue(clientId); setView("menu"); }} />;
   if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => setView("menu")} userProfile={userProfile} clientId={clientId} />;
   if(view === "list") return <QueueList queue={queue} setQueue={setQueue} library={library} onBack={() => setView("menu")} onLaunchStack={() => setView("stack")} />;
-  if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} />;
+  if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} prefill={prefillData} />;
   if(view === "bulk") return <BulkPasteForm onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />;
   if(view === "help") return <HelpScreen onBack={() => setView("menu")} />;
-  if(view === "camera") return <CameraScan onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} />;
+  if(view === "camera") return <CameraScan onBack={() => setView("menu")} onScanComplete={(data) => { setPrefillData(data); setView("manual"); }} />;
   
   return <div className="h-screen flex items-center justify-center">Loading Thrivoy...</div>;
 }
@@ -129,7 +130,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK (CRASH-PROOF)
+// 3. CARD STACK
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
     const [mode, setMode] = useState("card"); 
@@ -137,8 +138,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [file, setFile] = useState(null); 
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const controls = useAnimation(); 
-    
-    // 🛡️ CRASH GUARD: Ensure queue has valid items before access
     const active = queue.length > 0 ? queue[0] : null;
 
     if(!active) return (
@@ -195,7 +194,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     };
 
     if(mode === "disposition") return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Outcome?</h2><div className="grid gap-4 w-full max-w-xs"><button onClick={() => submitOutcome("Hot")} className="bg-orange-500 p-4 rounded-xl font-bold">🔥 Hot Lead</button><button onClick={() => submitOutcome("Interested")} className="bg-blue-600 p-4 rounded-xl font-bold">👍 Interested</button><button onClick={() => submitOutcome("No Answer")} className="bg-slate-700 p-4 rounded-xl font-bold">❄️ No Answer</button></div></div>
+        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Outcome?</h2><div className="grid gap-4 w-full max-w-xs"><button onClick={() => submitOutcome("Hot")} className="bg-orange-500 p-4 rounded-xl font-bold flex gap-3 justify-center"><Flame/> Hot Lead</button><button onClick={() => submitOutcome("Interested")} className="bg-blue-600 p-4 rounded-xl font-bold flex gap-3 justify-center"><ThumbsUp/> Interested</button><button onClick={() => submitOutcome("No Answer")} className="bg-slate-700 p-4 rounded-xl font-bold flex gap-3 justify-center"><Snowflake/> No Answer / Cold</button></div></div>
     );
     
     if(mode === "snooze") return (
@@ -207,23 +206,74 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20}/></button>
             <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex"><button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button><button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button></div>
             <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8">
-                <div className="space-y-4 flex-1">
+                <div className="space-y-4 flex-1 flex flex-col min-h-0 relative">
                    {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
-                   <div className="relative"><input value={active.context} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value; setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
-                   <div><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone}</div></div>
+                   <div className="relative shrink-0"><input value={active.context} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value; setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
+                   <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone}</div></div>
                    {actionType === 'whatsapp' ? (<textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none h-32" />) : (<div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 flex-1 flex items-center justify-center font-bold border border-blue-100">📞 Power Dialer Mode Active</div>)}
                    {actionType === 'whatsapp' && (<label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label>)}
                 </div>
-                <div className="mt-4 space-y-2"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${actionType === 'call' ? 'bg-blue-600' : 'bg-green-500'}`}>{actionType === 'call' ? "DIAL" : "WhatsApp"}</button><div className="flex gap-2"><button onClick={() => controls.start({ x: -500 }).then(() => {setQueue(q => q.slice(1)); setMode("card");})} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
+                <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${actionType === 'call' ? 'bg-blue-600' : 'bg-green-500'}`}>{actionType === 'call' ? <><Phone size={24}/> DIAL</> : <><Zap size={24}/> WhatsApp</>}</button><div className="flex gap-2"><button onClick={() => controls.start({ x: -500 }).then(() => {setQueue(q => q.slice(1)); setMode("card");})} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
             </motion.div>
         </div>
     ); 
 }
 
 // ==========================================
-// 5. CAMERA SCAN (VERIFY POPUP + RICH DATA)
+// 4. MANUAL FORM (With Email & Pre-Fill)
 // ==========================================
-function CameraScan({ onBack, onSubmit }) {
+function ManualForm({ onBack, onSubmit, status, prefill }) { 
+    // Initialize state with prefill data if available (e.g. from Camera)
+    const [name, setName] = useState(prefill?.name || ""); 
+    const [phone, setPhone] = useState(prefill?.phone || ""); 
+    const [email, setEmail] = useState(prefill?.email || "");
+    const [context, setContext] = useState(prefill?.context || ""); 
+    const [listening, setListening] = useState(false);
+
+    const toggleMic = () => {
+        if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported in this browser. Use Chrome.");
+        const recognition = new window.webkitSpeechRecognition();
+        recognition.continuous = false; recognition.lang = 'en-IN';
+        recognition.onstart = () => setListening(true);
+        recognition.onend = () => setListening(false);
+        recognition.onresult = (event) => { const text = event.results[0][0].transcript; setContext(prev => prev + " " + text); };
+        if(listening) recognition.stop(); else recognition.start();
+    };
+
+    const handleSubmit = () => { 
+        if(!phone) return alert("Phone is required"); 
+        onSubmit({ 
+            name: name || "Customer", 
+            phone: "91" + phone.replace(/\D/g,'').slice(-10), 
+            email: email || "",
+            context: context || "Lead" 
+        }); 
+        setName(""); setPhone(""); setContext(""); 
+    }; 
+    
+    return (
+        <div className="p-6 max-w-md mx-auto h-screen bg-white">
+            <button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">{prefill ? "Verify & Save" : "Add New Lead"}</h1>
+            <div className="space-y-4">
+                <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
+                <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
+                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Email (Optional)" />
+                <div className="relative">
+                    <textarea value={context} onChange={e=>setContext(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Notes / Company" />
+                    <button onClick={toggleMic} className={`absolute right-2 bottom-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button>
+                </div>
+                <button onClick={handleSubmit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg">Save to Queue</button>
+                {status && <p className="text-center font-bold text-green-600">{status}</p>}
+            </div>
+        </div>
+    ); 
+}
+
+// ==========================================
+// 5. CAMERA SCAN (NAVIGATES TO MANUAL FORM)
+// ==========================================
+function CameraScan({ onBack, onScanComplete }) {
     const fileInputRef = useRef(null);
     const [loading, setLoading] = useState(false);
 
@@ -247,24 +297,20 @@ function CameraScan({ onBack, onSubmit }) {
                     setLoading(false);
                     if(json.data) {
                         const raw = Array.isArray(json.data) ? json.data[0] : json.data;
-                        
-                        // 🧠 SMART VERIFY: Show all extracted fields so user can fix
-                        const extractedInfo = `Extracted:\nName: ${raw.name}\nPhone: ${raw.phone}\nEmail: ${raw.email}\nContext: ${raw.context}`;
-                        
-                        if(confirm(extractedInfo + "\n\nClick OK to Save, Cancel to Edit manually")) {
-                             onSubmit([{ 
-                                name: raw.name || "Card Lead", 
-                                phone: raw.phone || "", 
-                                email: raw.email || "",
-                                context: raw.context || "Card Scan" 
-                            }]);
-                        } else {
-                            // If they click Cancel, let them edit via prompt loops (Simple workaround for now)
-                            const n = prompt("Edit Name", raw.name);
-                            const p = prompt("Edit Phone", raw.phone);
-                            if(n && p) onSubmit([{ name: n, phone: p, context: raw.context }]);
-                        }
-                    } else { alert("❌ AI couldn't read the card."); }
+                        // Instead of saving, send data to the Manual Form for verification
+                        onScanComplete({ 
+                            name: raw.name || "Card Lead", 
+                            phone: raw.phone || "", 
+                            email: raw.email || "",
+                            context: raw.context || "Card Scan" 
+                        });
+                    } else { 
+                        alert("❌ AI couldn't read the card. Try again."); 
+                    }
+                })
+                .catch(err => {
+                    setLoading(false);
+                    alert("Error: " + err.message);
                 });
             };
             img.src = readerEvent.target.result;
@@ -274,13 +320,19 @@ function CameraScan({ onBack, onSubmit }) {
 
     return (
         <div className="h-screen bg-black flex flex-col items-center justify-center p-6 text-white text-center">
-            {loading ? <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div> : (
+            {loading ? ( 
+                <div className="flex flex-col items-center animate-in fade-in">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div>
+                    <h2 className="text-xl font-bold">Analysing Card...</h2>
+                    <p className="text-gray-400 text-sm mt-2">AI is extracting details.</p>
+                </div> 
+            ) : (
                 <>
                     <Camera size={64} className="mb-6 text-orange-500"/>
                     <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                    <p className="text-gray-400 mb-8">Take a photo. AI will extract details.</p>
+                    <p className="text-gray-400 mb-8">Take a photo. AI will pre-fill the form.</p>
                     <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4">Open Camera</button>
-                    <button onClick={onBack} className="text-gray-400">Cancel</button>
+                    <button onClick={onBack} className="text-gray-400 font-bold">Cancel</button>
                     <input type="file" ref={fileInputRef} accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
                 </>
             )}
@@ -289,41 +341,7 @@ function CameraScan({ onBack, onSubmit }) {
 }
 
 // ==========================================
-// 6. MANUAL FORM (With Email)
-// ==========================================
-function ManualForm({ onBack, onSubmit, status }) { 
-    const [name, setName] = useState(""); 
-    const [phone, setPhone] = useState(""); 
-    const [email, setEmail] = useState("");
-    const [context, setContext] = useState(""); 
-    
-    const handleSubmit = () => { 
-        if(!phone) return alert("Phone is required"); 
-        onSubmit({ 
-            name: name || "Customer", 
-            phone: "91" + phone.replace(/\D/g,'').slice(-10), 
-            email: email || "",
-            context: context || "Lead" 
-        }); 
-    }; 
-    
-    return (
-        <div className="p-6 max-w-md mx-auto h-screen bg-white">
-            <button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">Add New Lead</h1>
-            <div className="space-y-4">
-                <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
-                <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
-                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Email (Optional)" />
-                <textarea value={context} onChange={e=>setContext(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Notes / Company" />
-                <button onClick={handleSubmit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg">Save</button>
-            </div>
-        </div>
-    ); 
-}
-
-// ==========================================
-// 7. BULK PASTE (With Notifications)
+// 6. BULK PASTE (Restored Notifications)
 // ==========================================
 function BulkPasteForm({ onBack, onSubmit }) { 
     const [text, setText] = useState(""); 
