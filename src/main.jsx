@@ -12,14 +12,14 @@ import {
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbz_tix4wYmsswGmX5nenKdS1bArlHlywG7orQJb0PC7Qw8e0320KoyJvSdQFpA6P0KcPg/exec";
+// ⚠️ PASTE NEW URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbwqGTzE2PT0oly-qHI5BPENy3l7HS-r1ZmvftOeF9jY-P8vMGQYew1spOgHoV3Z_bO2Ww/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
     title: "AI Power Unlocked 🧠",
-    text: "Use the Camera icon to scan business cards. Use the Wand inside a card to rewrite messages instantly!",
+    text: "AI now extracts Company Name & Email from business cards automatically!",
     type: "info" 
 };
 
@@ -35,17 +35,10 @@ function App() {
   const [userProfile, setUserProfile] = useState(null); 
   const [status, setStatus] = useState("");
   
-  const [template, setTemplate] = useState(() => {
-      return localStorage.getItem("revive_active_template") || "Hi {{name}}, regarding {{context}}.";
-  });
+  const [template, setTemplate] = useState(() => localStorage.getItem("revive_active_template") || "Hi {{name}}, regarding {{context}}.");
+  const [library, setLibrary] = useState(() => JSON.parse(localStorage.getItem("revive_library") || "[]"));
 
-  const [library, setLibrary] = useState(() => {
-      return JSON.parse(localStorage.getItem("revive_library") || "[]");
-  });
-
-  useEffect(() => { 
-      localStorage.setItem("revive_active_template", template); 
-  }, [template]);
+  useEffect(() => { localStorage.setItem("revive_active_template", template); }, [template]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -57,60 +50,29 @@ function App() {
     } else if (key) {
         setClientId(key); 
         fetchQueue(key); 
-        // Fetch User Profile for Editor
-        fetch(API_URL, { 
-            method: 'POST', 
-            body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: key } }) 
-        })
-        .then(r => r.json())
-        .then(j => { 
-            if(j.data) setUserProfile(j.data); 
-        });
+        fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: key } }) })
+            .then(r=>r.json()).then(j => { if(j.data) setUserProfile(j.data); });
     }
   }, []);
 
-  // --- ACTIONS ---
-  const saveActiveTemplate = (newTemp) => { 
-      setTemplate(newTemp); 
-      localStorage.setItem("revive_active_template", newTemp); 
-  };
-
-  const addToLibrary = (name, text) => { 
-      const n = [...library, { id: Date.now(), name, text }]; 
-      setLibrary(n); 
-      localStorage.setItem("revive_library", JSON.stringify(n)); 
-  };
-
-  const removeFromLibrary = (id) => { 
-      const n = library.filter(t => t.id !== id); 
-      setLibrary(n); 
-      localStorage.setItem("revive_library", JSON.stringify(n)); 
-  };
+  const saveActiveTemplate = (newTemp) => { setTemplate(newTemp); localStorage.setItem("revive_active_template", newTemp); };
+  const addToLibrary = (name, text) => { const n = [...library, { id: Date.now(), name, text }]; setLibrary(n); localStorage.setItem("revive_library", JSON.stringify(n)); };
+  const removeFromLibrary = (id) => { const n = library.filter(t => t.id !== id); setLibrary(n); localStorage.setItem("revive_library", JSON.stringify(n)); };
 
   const fetchQueue = async (id) => {
     if(id === ADMIN_KEY) return; 
     try {
-        const res = await fetch(API_URL, { 
-            method: 'POST', 
-            body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) 
-        });
+        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) });
         const json = await res.json();
-        if(json.data) { 
-            setQueue(json.data.queue); 
-            if(json.data.stats) setStats(json.data.stats); 
-        }
+        if(json.data) { setQueue(json.data.queue || []); if(json.data.stats) setStats(json.data.stats); }
     } catch(e) { console.error("API Error", e); }
   };
 
   const handleBulkSubmit = async (leads) => {
     setStatus(`Saving ${leads.length} leads...`);
     try {
-        const res = await fetch(API_URL, { 
-            method: 'POST', 
-            body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) 
-        });
+        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) });
         const json = await res.json();
-        
         if(json.status === "error" && json.message === "LIMIT_REACHED") {
             alert("🔒 LIMIT REACHED!\n\nYou have hit the 100 Lead Limit on the Free Plan.\nUpgrade to Pro to add more.");
             setStatus("");
@@ -124,97 +86,25 @@ function App() {
 
   const handleFileUpload = (e) => {
     setStatus("Parsing CSV...");
-    Papa.parse(e.target.files[0], { 
-        header: true, 
-        complete: async (results) => {
-            const leads = results.data
-                .filter(row => row.Phone)
-                .map(row => ({ 
-                    name: row.Name || "Customer", 
-                    phone: "91" + row.Phone.replace(/\D/g,'').slice(-10), 
-                    email: row.Email || "", 
-                    context: row.Context || "Follow Up" 
-                }));
-            handleBulkSubmit(leads);
-        }
-    });
+    Papa.parse(e.target.files[0], { header: true, complete: async (results) => {
+        const leads = results.data.filter(row => row.Phone).map(row => ({ name: row.Name || "Customer", phone: "91" + row.Phone.replace(/\D/g,'').slice(-10), email: row.Email || "", context: row.Context || "Follow Up" }));
+        handleBulkSubmit(leads);
+    }});
   };
 
-  // --- VIEW ROUTING ---
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
   if (clientId === ADMIN_KEY) return <AdminDashboard />;
   if (!clientId) return <LandingPage />;
   
-  if(view === "menu") return (
-      <MenuScreen 
-          queue={queue} 
-          stats={stats} 
-          status={status} 
-          onViewChange={setView} 
-          onUpload={handleFileUpload} 
-          announcement={ANNOUNCEMENT} 
-          clientId={clientId} 
-      />
-  );
-
+  if(view === "menu") return <MenuScreen queue={queue} stats={stats} status={status} onViewChange={setView} onUpload={handleFileUpload} announcement={ANNOUNCEMENT} clientId={clientId} />;
   if(view === "hotlist") return <HotList clientId={clientId} onBack={() => setView("menu")} />;
-  
-  if(view === "stack") return (
-      <CardStack 
-          queue={queue} 
-          setQueue={setQueue} 
-          template={template} 
-          library={library} 
-          onBack={() => { fetchQueue(clientId); setView("menu"); }} 
-      />
-  );
-
-  if(view === "settings") return (
-      <SettingsForm 
-          currentTemplate={template} 
-          library={library} 
-          onSaveActive={saveActiveTemplate} 
-          onAddToLib={addToLibrary} 
-          onRemoveFromLib={removeFromLibrary} 
-          onBack={() => setView("menu")} 
-          userProfile={userProfile} 
-          clientId={clientId} 
-      />
-  );
-
-  if(view === "list") return (
-      <QueueList 
-          queue={queue} 
-          setQueue={setQueue} 
-          library={library} 
-          onBack={() => setView("menu")} 
-          onLaunchStack={() => setView("stack")} 
-      />
-  );
-
-  if(view === "manual") return (
-      <ManualForm 
-          onBack={() => setView("menu")} 
-          onSubmit={(l) => handleBulkSubmit([l])} 
-          status={status} 
-      />
-  );
-
-  if(view === "bulk") return (
-      <BulkPasteForm 
-          onBack={() => setView("menu")} 
-          onSubmit={handleBulkSubmit} 
-      />
-  );
-
+  if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} onBack={() => { fetchQueue(clientId); setView("menu"); }} />;
+  if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => setView("menu")} userProfile={userProfile} clientId={clientId} />;
+  if(view === "list") return <QueueList queue={queue} setQueue={setQueue} library={library} onBack={() => setView("menu")} onLaunchStack={() => setView("stack")} />;
+  if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} />;
+  if(view === "bulk") return <BulkPasteForm onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />;
   if(view === "help") return <HelpScreen onBack={() => setView("menu")} />;
-  
-  if(view === "camera") return (
-      <CameraScan 
-          onBack={() => setView("menu")} 
-          onSubmit={(l) => handleBulkSubmit([l])} 
-      />
-  );
+  if(view === "camera") return <CameraScan onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} />;
   
   return <div className="h-screen flex items-center justify-center">Loading Thrivoy...</div>;
 }
@@ -223,90 +113,23 @@ function App() {
 // 2. MENU SCREEN
 // ==========================================
 function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement, clientId }) {
-    const shareMyCard = () => {
-        const url = `${window.location.origin}/?u=${clientId}`;
-        if (navigator.share) {
-            navigator.share({ title: 'My Digital Card', text: 'Here is my digital business card.', url: url });
-        } else {
-            window.open(`https://wa.me/?text=${encodeURIComponent(url)}`);
-        }
-    };
-
+    const shareMyCard = () => { const url = `${window.location.origin}/?u=${clientId}`; if (navigator.share) navigator.share({ title: 'My Digital Card', url }); else window.open(`https://wa.me/?text=${encodeURIComponent(url)}`); };
     return (
       <div className="p-6 max-w-md mx-auto space-y-6 animate-in fade-in pb-24">
-          <div className="flex justify-between items-center">
-             <h1 className="text-2xl font-bold text-gray-800">Thrivoy</h1>
-             <div className="flex gap-2">
-                 <button onClick={shareMyCard} className="p-2 bg-black text-white rounded-full shadow-lg animate-pulse">
-                    <ScanLine size={20} />
-                 </button>
-                 <button onClick={() => onViewChange("settings")} className="p-2 bg-gray-100 rounded-full text-gray-600">
-                    <Settings size={20} />
-                 </button>
-             </div>
-          </div>
-          
-          <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl p-4 text-white shadow-lg flex justify-between items-center">
-              <div>
-                  <div className="text-blue-100 text-xs font-bold uppercase tracking-wider">Daily Score</div>
-                  <div className="text-3xl font-black">{stats.today} <span className="text-lg font-normal opacity-70">wins</span></div>
-              </div>
-              <div className="bg-white/20 p-3 rounded-lg"><Zap size={24} fill="currentColor"/></div>
-          </div>
-
-          {announcement.text && (
-              <div className="p-4 rounded-xl border bg-purple-50 border-purple-100 text-purple-900 flex items-start gap-3">
-                  <div className="mt-1"><Info size={20} /></div>
-                  <div>
-                      <h3 className="font-bold text-sm">{announcement.title}</h3>
-                      <p className="text-xs opacity-90 leading-relaxed">{announcement.text}</p>
-                  </div>
-              </div>
-          )}
-          
-          <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => onViewChange("camera")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50">
-                  <Camera size={24} className="text-orange-500"/>
-                  <span className="font-bold text-sm">Scan Card</span>
-              </button>
-              <button onClick={() => onViewChange("bulk")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50">
-                  <Wand2 size={24} className="text-purple-600"/>
-                  <span className="font-bold text-sm">AI Paste</span>
-              </button>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => onViewChange("manual")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50">
-                  <UserPlus size={24} className="text-blue-600"/>
-                  <span className="font-bold text-sm">Add One</span>
-              </button>
-               <button onClick={() => onViewChange("hotlist")} className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-orange-100">
-                  <Flame size={24} />
-                  <span className="font-bold text-sm">Hot Vault</span>
-              </button>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
-              <Upload className="mx-auto mb-2 text-gray-400" />
-              <p className="text-sm text-gray-500 mb-4">Have a CSV file?</p>
-              <label className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors">
-                  Upload CSV 
-                  <input type="file" accept=".csv" onChange={onUpload} className="hidden" />
-              </label>
-          </div>
-          
-          {queue.length > 0 && (
-             <button onClick={() => onViewChange("stack")} className="w-full bg-green-600 text-white p-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-green-700">
-                <Play size={20} fill="currentColor"/> Start Calling ({queue.length})
-             </button>
-          )}
+          <div className="flex justify-between items-center"><h1 className="text-2xl font-bold text-gray-800">Thrivoy</h1><div className="flex gap-2"><button onClick={shareMyCard} className="p-2 bg-black text-white rounded-full shadow-lg animate-pulse"><ScanLine size={20}/></button><button onClick={() => onViewChange("settings")} className="p-2 bg-gray-100 rounded-full"><Settings size={20}/></button></div></div>
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl p-4 text-white shadow-lg flex justify-between items-center"><div><div className="text-blue-100 text-xs font-bold uppercase tracking-wider">Daily Score</div><div className="text-3xl font-black">{stats.today} <span className="text-lg font-normal opacity-70">wins</span></div></div><div className="bg-white/20 p-3 rounded-lg"><Zap size={24} fill="currentColor"/></div></div>
+          {announcement.text && (<div className="p-4 rounded-xl border bg-purple-50 border-purple-100 text-purple-900 flex items-start gap-3"><div className="mt-1"><Info size={20}/></div><div><h3 className="font-bold text-sm">{announcement.title}</h3><p className="text-xs opacity-90 leading-relaxed">{announcement.text}</p></div></div>)}
+          <div className="grid grid-cols-2 gap-4"><button onClick={() => onViewChange("camera")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><Camera size={24} className="text-orange-500"/><span className="font-bold text-sm">Scan Card</span></button><button onClick={() => onViewChange("bulk")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><Wand2 size={24} className="text-purple-600"/><span className="font-bold text-sm">AI Paste</span></button></div>
+          <div className="grid grid-cols-2 gap-4"><button onClick={() => onViewChange("manual")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><UserPlus size={24} className="text-blue-600"/><span className="font-bold text-sm">Add One</span></button><button onClick={() => onViewChange("hotlist")} className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-orange-100"><Flame size={24}/><span className="font-bold text-sm">Hot Vault</span></button></div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center"><Upload className="mx-auto mb-2 text-gray-400"/><p className="text-sm text-gray-500 mb-4">Have a CSV file?</p><label className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors">Upload CSV <input type="file" accept=".csv" onChange={onUpload} className="hidden"/></label></div>
+          {queue.length > 0 && (<button onClick={() => onViewChange("stack")} className="w-full bg-green-600 text-white p-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-green-700"><Play size={20} fill="currentColor"/> Start Calling ({queue.length})</button>)}
           {status && <p className="text-center font-bold text-blue-600 animate-pulse">{status}</p>}
       </div>
     );
 }
 
 // ==========================================
-// 3. CARD STACK (CRASH-PROOF EDITION)
+// 3. CARD STACK (CRASH-PROOF)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
     const [mode, setMode] = useState("card"); 
@@ -315,7 +138,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const controls = useAnimation(); 
     
-    // 🛡️ CRASH GUARD: Ensure we have a valid lead to show
+    // 🛡️ CRASH GUARD: Ensure queue has valid items before access
     const active = queue.length > 0 ? queue[0] : null;
 
     if(!active) return (
@@ -330,7 +153,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
     if(matched) activeTemplate = matched.text; 
     
-    // 🛡️ SAFE DATA ACCESS: Default values prevent undefined errors
     const [currentMessage, setCurrentMessage] = useState(
         activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update")
     );
@@ -341,26 +163,11 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         }
     }, [active?.lead_id]);
 
-    const updateActive = (field, value) => { 
-        const newQ = [...queue]; 
-        if(newQ[0]) newQ[0][field] = value; 
-        setQueue(newQ); 
-    }; 
-    
-    const removeCard = () => { 
-        setQueue(q => q.slice(1)); 
-        setMode("card"); 
-        setFile(null); 
-    }; 
-
     const handleAiRewrite = async (tone, lang) => {
         setPolyglotMenu(false);
         const res = await fetch(API_URL, { 
             method: 'POST', 
-            body: JSON.stringify({ 
-                action: "AI_REWRITE_MSG", 
-                payload: { context: active.context, current_msg: currentMessage, tone, lang } 
-            }) 
+            body: JSON.stringify({ action: "AI_REWRITE_MSG", payload: { context: active.context, current_msg: currentMessage, tone, lang } }) 
         });
         const json = await res.json();
         if(json.data) setCurrentMessage(json.data);
@@ -368,179 +175,53 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
 
     const handlePrimaryAction = async () => {
         if (actionType === 'call') { 
-            window.open(`tel:${active.phone}`, '_self'); 
-            setMode("disposition"); 
+            window.open(`tel:${active.phone}`, '_self'); setMode("disposition"); 
         } else {
             if (file && navigator.share) { 
-                try { 
-                    await navigator.share({ files: [file], title: 'Message', text: currentMessage }); 
-                    setMode("disposition"); 
-                } catch (err) { console.log(err); } 
+                try { await navigator.share({ files: [file], title: 'Message', text: currentMessage }); setMode("disposition"); } catch (err) { console.log(err); } 
             } else { 
-                window.open(`https://wa.me/${active.phone}?text=${encodeURIComponent(currentMessage)}`, '_blank'); 
-                setMode("disposition"); 
+                window.open(`https://wa.me/${active.phone}?text=${encodeURIComponent(currentMessage)}`, '_blank'); setMode("disposition"); 
             }
         }
     };
 
-    const submitOutcome = (tag) => { 
-        controls.start({ x: 500, opacity: 0 }).then(() => { 
-            controls.set({ x: 0, opacity: 1 }); 
-            fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) }); 
-            removeCard(); 
-        }); 
-    };
+    const submitOutcome = (tag) => { controls.start({ x: 500, opacity: 0 }).then(() => { controls.set({ x: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) }); setQueue(q => q.slice(1)); setMode("card"); }); };
     
     const addToCalendar = (days) => { 
         const d = new Date(); d.setDate(d.getDate() + days); 
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(active.context||"")}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
-        
-        controls.start({ y: 500, opacity: 0 }).then(() => { 
-            controls.set({ y: 0, opacity: 1 }); 
-            fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); 
-            removeCard(); 
-        });
+        controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); setQueue(q => q.slice(1)); setMode("card"); });
     };
 
     if(mode === "disposition") return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in">
-            <h2 className="text-2xl font-bold mb-8">{actionType === 'call' ? "Call Outcome?" : "Message Outcome?"}</h2>
-            <div className="grid grid-cols-1 gap-4 w-full max-w-xs">
-                <button onClick={() => submitOutcome("Hot")} className="bg-orange-500 p-4 rounded-xl font-bold flex gap-3 justify-center"><Flame/> Hot Lead</button>
-                <button onClick={() => submitOutcome("Interested")} className="bg-blue-600 p-4 rounded-xl font-bold flex gap-3 justify-center"><ThumbsUp/> Interested</button>
-                <button onClick={() => submitOutcome("No Answer")} className="bg-slate-700 p-4 rounded-xl font-bold flex gap-3 justify-center"><Snowflake/> No Answer / Cold</button>
-            </div>
-            <button onClick={() => setMode("card")} className="mt-8 text-gray-400 underline text-sm">Back</button>
-        </div>
+        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Outcome?</h2><div className="grid gap-4 w-full max-w-xs"><button onClick={() => submitOutcome("Hot")} className="bg-orange-500 p-4 rounded-xl font-bold">🔥 Hot Lead</button><button onClick={() => submitOutcome("Interested")} className="bg-blue-600 p-4 rounded-xl font-bold">👍 Interested</button><button onClick={() => submitOutcome("No Answer")} className="bg-slate-700 p-4 rounded-xl font-bold">❄️ No Answer</button></div></div>
     );
     
     if(mode === "snooze") return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in">
-            <h2 className="text-2xl font-bold mb-8">Snooze & Remind...</h2>
-            <div className="gap-4 grid w-full max-w-xs">
-                <button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button>
-                <button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button>
-                <button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button>
-            </div>
-            <button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button>
-        </div>
+        <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Snooze...</h2><div className="gap-4 grid w-full max-w-xs"><button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button><button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button><button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button></div><button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button></div>
     );
 
     return (
         <div className="h-screen flex flex-col items-center justify-center p-4 max-w-sm mx-auto relative">
-            <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20} /></button>
-            <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex">
-                <button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button>
-                <button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button>
-            </div>
-            
+            <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20}/></button>
+            <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex"><button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button><button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button></div>
             <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8">
-                <div className="space-y-4 flex-1 flex flex-col min-h-0 relative">
-                   {polyglotMenu && (
-                       <div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in">
-                           <div className="text-xs font-bold text-gray-400 mb-2 px-2">REWRITE AS:</div>
-                           <button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button>
-                           <button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button>
-                           <div className="border-t my-1"></div>
-                           <button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button>
-                           <button onClick={() => handleAiRewrite("Persuasive", "Hinglish")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">💬 Hinglish</button>
-                           <button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button>
-                       </div>
-                   )}
-
-                   <div className="relative shrink-0">
-                       <input value={active.context} onChange={(e) => updateActive('context', e.target.value)} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" placeholder="Reason" />
-                       <button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button>
-                   </div>
-                   <div className="shrink-0">
-                       <input value={active.name} onChange={(e) => updateActive('name', e.target.value)} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" />
-                       <div className="flex flex-col mt-1"><span className="text-gray-400 font-mono text-sm">+{active.phone || "0000000000"}</span></div>
-                   </div>
-                   
-                   {actionType === 'whatsapp' ? (
-                       <textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 overflow-y-auto border border-gray-100 flex-1 w-full outline-none resize-none" />
-                   ) : (
-                       <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 flex-1 flex items-center justify-center font-bold border border-blue-100">📞 Power Dialer Mode Active</div>
-                   )}
-                   
-                   {actionType === 'whatsapp' && (
-                       <label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}>
-                           <input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" />
-                           <div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div>
-                       </label>
-                   )}
+                <div className="space-y-4 flex-1">
+                   {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
+                   <div className="relative"><input value={active.context} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value; setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
+                   <div><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone}</div></div>
+                   {actionType === 'whatsapp' ? (<textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none h-32" />) : (<div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 flex-1 flex items-center justify-center font-bold border border-blue-100">📞 Power Dialer Mode Active</div>)}
+                   {actionType === 'whatsapp' && (<label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label>)}
                 </div>
-                
-                <div className="mt-4 space-y-2 shrink-0">
-                    <button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg active:scale-95 transition-transform ${actionType === 'call' ? 'bg-blue-600' : 'bg-green-500'}`}>
-                        {actionType === 'call' ? <><Phone size={24} /> DIAL NUMBER</> : <><Zap size={24} /> Send WhatsApp</>}
-                    </button>
-                    <div className="flex gap-2">
-                        <button onClick={() => controls.start({ x: -500 }).then(removeCard)} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button>
-                        <button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button>
-                    </div>
-                </div>
+                <div className="mt-4 space-y-2"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${actionType === 'call' ? 'bg-blue-600' : 'bg-green-500'}`}>{actionType === 'call' ? "DIAL" : "WhatsApp"}</button><div className="flex gap-2"><button onClick={() => controls.start({ x: -500 }).then(() => {setQueue(q => q.slice(1)); setMode("card");})} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
             </motion.div>
         </div>
     ); 
 }
 
 // ==========================================
-// 4. MANUAL FORM (Voice)
-// ==========================================
-function ManualForm({ onBack, onSubmit, status }) { 
-    const [name, setName] = useState(""); 
-    const [phone, setPhone] = useState(""); 
-    const [context, setContext] = useState(""); 
-    const [listening, setListening] = useState(false);
-
-    const toggleMic = () => {
-        if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported in this browser. Use Chrome.");
-        const recognition = new window.webkitSpeechRecognition();
-        recognition.continuous = false;
-        recognition.lang = 'en-IN';
-        
-        recognition.onstart = () => setListening(true);
-        recognition.onend = () => setListening(false);
-        recognition.onresult = (event) => { 
-            const text = event.results[0][0].transcript; 
-            setContext(prev => prev + " " + text); 
-        };
-        
-        if(listening) recognition.stop(); else recognition.start();
-    };
-
-    const handleSubmit = () => { 
-        if(!phone) return alert("Phone is required"); 
-        onSubmit({ 
-            name: name || "Customer", 
-            phone: "91" + phone.replace(/\D/g,'').slice(-10), 
-            context: context || "Lead" 
-        }); 
-        setName(""); setPhone(""); setContext(""); 
-    }; 
-    
-    return (
-        <div className="p-6 max-w-md mx-auto h-screen bg-white">
-            <button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">Add New Lead</h1>
-            <div className="space-y-4">
-                <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg text-lg border outline-none" placeholder="Name" />
-                <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg text-lg border outline-none font-mono" placeholder="Phone" />
-                <div className="relative">
-                    <textarea value={context} onChange={e=>setContext(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg text-lg border outline-none" placeholder="Context / Notes" />
-                    <button onClick={toggleMic} className={`absolute right-2 bottom-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button>
-                </div>
-                <button onClick={handleSubmit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold text-lg mt-4 shadow-lg">Save to Queue</button>
-                {status && <p className="text-center font-bold text-green-600">{status}</p>}
-            </div>
-        </div>
-    ); 
-}
-
-// ==========================================
-// 5. CAMERA SCAN (WITH VERIFY POPUP)
+// 5. CAMERA SCAN (VERIFY POPUP + RICH DATA)
 // ==========================================
 function CameraScan({ onBack, onSubmit }) {
     const fileInputRef = useRef(null);
@@ -555,46 +236,35 @@ function CameraScan({ onBack, onSubmit }) {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; 
-                const scaleSize = MAX_WIDTH / img.width;
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scaleSize;
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-                const base64 = dataUrl.split(",")[1];
+                const MAX_WIDTH = 800; const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH; canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL("image/jpeg", 0.7); const base64 = dataUrl.split(",")[1];
                 
-                fetch(API_URL, { 
-                    method: 'POST', 
-                    body: JSON.stringify({ action: "AI_ANALYZE_IMAGE", payload: { image: base64 } }) 
-                })
+                fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_ANALYZE_IMAGE", payload: { image: base64 } }) })
                 .then(r => r.json())
                 .then(json => { 
                     setLoading(false);
                     if(json.data) {
                         const raw = Array.isArray(json.data) ? json.data[0] : json.data;
                         
-                        // 🧠 VERIFY STEP: Ask user to confirm/edit before saving
-                        const newName = prompt("Check Extracted Name:", raw.name || "Card Lead");
-                        const newPhone = prompt("Check Extracted Phone:", raw.phone || "");
+                        // 🧠 SMART VERIFY: Show all extracted fields so user can fix
+                        const extractedInfo = `Extracted:\nName: ${raw.name}\nPhone: ${raw.phone}\nEmail: ${raw.email}\nContext: ${raw.context}`;
                         
-                        if(newName && newPhone) {
-                            onSubmit([{ 
-                                name: newName, 
-                                phone: newPhone, 
-                                context: "Card Scan", 
-                                email: raw.email || "" 
+                        if(confirm(extractedInfo + "\n\nClick OK to Save, Cancel to Edit manually")) {
+                             onSubmit([{ 
+                                name: raw.name || "Card Lead", 
+                                phone: raw.phone || "", 
+                                email: raw.email || "",
+                                context: raw.context || "Card Scan" 
                             }]);
                         } else {
-                            alert("Scan Cancelled.");
+                            // If they click Cancel, let them edit via prompt loops (Simple workaround for now)
+                            const n = prompt("Edit Name", raw.name);
+                            const p = prompt("Edit Phone", raw.phone);
+                            if(n && p) onSubmit([{ name: n, phone: p, context: raw.context }]);
                         }
-                    } else { 
-                        alert("❌ AI couldn't read the card. Try again with better lighting."); 
-                    }
-                })
-                .catch(err => {
-                    setLoading(false);
-                    alert("Error: " + err.message);
+                    } else { alert("❌ AI couldn't read the card."); }
                 });
             };
             img.src = readerEvent.target.result;
@@ -604,21 +274,13 @@ function CameraScan({ onBack, onSubmit }) {
 
     return (
         <div className="h-screen bg-black flex flex-col items-center justify-center p-6 text-white text-center">
-            {loading ? ( 
-                <div className="flex flex-col items-center animate-in fade-in">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div>
-                    <h2 className="text-xl font-bold">Analysing Card...</h2>
-                    <p className="text-gray-400 text-sm mt-2">AI is reading text.</p>
-                </div> 
-            ) : (
+            {loading ? <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div> : (
                 <>
                     <Camera size={64} className="mb-6 text-orange-500"/>
                     <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                    <p className="text-gray-400 mb-8">Take a photo. AI will extract Name & Phone.</p>
-                    <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4 shadow-lg active:scale-95 transition-transform">
-                        Open Camera
-                    </button>
-                    <button onClick={onBack} className="text-gray-400 font-bold">Cancel</button>
+                    <p className="text-gray-400 mb-8">Take a photo. AI will extract details.</p>
+                    <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4">Open Camera</button>
+                    <button onClick={onBack} className="text-gray-400">Cancel</button>
                     <input type="file" ref={fileInputRef} accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
                 </>
             )}
@@ -627,7 +289,41 @@ function CameraScan({ onBack, onSubmit }) {
 }
 
 // ==========================================
-// 6. BULK PASTE (Smart Scan)
+// 6. MANUAL FORM (With Email)
+// ==========================================
+function ManualForm({ onBack, onSubmit, status }) { 
+    const [name, setName] = useState(""); 
+    const [phone, setPhone] = useState(""); 
+    const [email, setEmail] = useState("");
+    const [context, setContext] = useState(""); 
+    
+    const handleSubmit = () => { 
+        if(!phone) return alert("Phone is required"); 
+        onSubmit({ 
+            name: name || "Customer", 
+            phone: "91" + phone.replace(/\D/g,'').slice(-10), 
+            email: email || "",
+            context: context || "Lead" 
+        }); 
+    }; 
+    
+    return (
+        <div className="p-6 max-w-md mx-auto h-screen bg-white">
+            <button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">Add New Lead</h1>
+            <div className="space-y-4">
+                <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
+                <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
+                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Email (Optional)" />
+                <textarea value={context} onChange={e=>setContext(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Notes / Company" />
+                <button onClick={handleSubmit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg">Save</button>
+            </div>
+        </div>
+    ); 
+}
+
+// ==========================================
+// 7. BULK PASTE (With Notifications)
 // ==========================================
 function BulkPasteForm({ onBack, onSubmit }) { 
     const [text, setText] = useState(""); 
@@ -638,12 +334,12 @@ function BulkPasteForm({ onBack, onSubmit }) {
         if(!text) return;
         setLoading(true);
         try {
-            const res = await fetch(API_URL, { 
-                method: 'POST', 
-                body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) 
-            });
+            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) });
             const json = await res.json();
-            if(json.data) setParsed(json.data);
+            if(json.data) {
+                setParsed(json.data);
+                alert(`✅ AI Found ${json.data.length} Leads!`);
+            }
         } catch(e) { alert("AI Error: " + e.message); }
         setLoading(false);
     };
@@ -651,41 +347,34 @@ function BulkPasteForm({ onBack, onSubmit }) {
     const handleSave = async () => { await onSubmit(parsed); }; 
     
     if(parsed.length > 0) return (
-        <div className="h-screen bg-white flex flex-col font-sans">
-            <div className="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
-                <h2 className="font-bold">✨ AI Found {parsed.length} Leads</h2>
-                <button onClick={() => setParsed([])} className="text-red-500 text-sm font-bold">Reset</button>
+        <div className="h-screen bg-white flex flex-col p-4">
+            <div className="flex justify-between mb-4 items-center">
+                <h2 className="font-bold">Found {parsed.length}</h2>
+                <button onClick={handleSave} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow">Save All</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+            <div className="flex-1 overflow-y-auto space-y-2">
                 {parsed.map((l, i) => (
-                    <div key={i} className="flex gap-3 p-3 bg-white rounded-xl border shadow-sm">
-                        <div className={`w-1 rounded-full ${l.score === 'Hot' ? 'bg-orange-500' : 'bg-gray-300'}`}></div>
-                        <div className="flex-1">
-                            <div className="flex justify-between"><span className="font-bold text-gray-800">{l.name}</span><span className="text-[10px] font-bold bg-gray-100 px-2 rounded text-gray-500">{l.score}</span></div>
-                            <div className="text-xs text-gray-500">{l.phone}</div>
-                            <div className="text-xs text-blue-600 mt-1 italic">"{l.context}"</div>
-                        </div>
+                    <div key={i} className="p-3 border rounded-xl bg-gray-50">
+                        <div className="font-bold">{l.name}</div>
+                        <div className="text-xs text-gray-500">{l.phone} • {l.email}</div>
+                        <div className="text-xs text-blue-600 italic">{l.context}</div>
                     </div>
                 ))}
             </div>
-            <div className="p-4 border-t shrink-0"><button onClick={handleSave} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg">Save to CRM</button></div>
         </div>
-    ); 
+    );
     
     return (
         <div className="p-6 max-w-md mx-auto h-screen bg-white flex flex-col">
             <button onClick={onBack} className="text-gray-400 mb-4 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
             <h1 className="text-2xl font-black text-gray-800 mb-2">AI Smart Scan 🧠</h1>
-            <p className="text-sm text-gray-500 mb-4">Paste messy text. AI will fix it.</p>
-            <textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. Rahul 988822222 wants 3bhk urgent..." className="flex-1 w-full p-4 bg-gray-50 rounded-xl border outline-none font-mono text-sm mb-4"/>
+            <p className="text-sm text-gray-500 mb-4">Paste messy text. AI will extract Name, Phone, Email & Company.</p>
+            <textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. Rahul 988822222 from Acme Corp..." className="flex-1 w-full p-4 bg-gray-50 rounded-xl border outline-none font-mono text-sm mb-4"/>
             <button onClick={handleSmartScan} disabled={!text || loading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2">{loading ? "AI is Thinking..." : <><Wand2 size={20}/> Extract Leads</>}</button>
         </div>
     ); 
 }
 
-// ==========================================
-// 7. SETTINGS (Pro Profile)
-// ==========================================
 function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { 
     const [temp, setTemp] = useState(currentTemplate); 
     const [saveName, setSaveName] = useState(""); 
@@ -740,9 +429,6 @@ function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRe
     ); 
 }
 
-// ==========================================
-// 8. DIGITAL BUSINESS CARD
-// ==========================================
 function DigitalCard({ profileId }) {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -799,9 +485,6 @@ function DigitalCard({ profileId }) {
     );
 }
 
-// ==========================================
-// 9. HOTLIST VAULT
-// ==========================================
 function HotList({ clientId, onBack }) {
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -844,9 +527,6 @@ function HotList({ clientId, onBack }) {
     );
 }
 
-// ==========================================
-// 10. ADMIN DASHBOARD
-// ==========================================
 function AdminDashboard() { 
     const [name, setName] = useState(""); 
     const [phone, setPhone] = useState(""); 
@@ -989,9 +669,7 @@ function HelpScreen({ onBack }) {
     ); 
 }
 
-// ==========================================
-// 11. LANDING PAGE & MARKETING
-// ==========================================
+// 11. LANDING PAGE & HELPERS
 function LandingPage() { 
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
