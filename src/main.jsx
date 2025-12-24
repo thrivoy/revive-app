@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbxp-ZuF4djJJdAZYxvyIFer9y5veBKnczuZtI9q7jebyGGxc3hQZ5rexY6Mvf2sgxcjig/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz_tix4wYmsswGmX5nenKdS1bArlHlywG7orQJb0PC7Qw8e0320KoyJvSdQFpA6P0KcPg/exec";
 
 const ADMIN_KEY = "master";
 
@@ -306,7 +306,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK (Crash-Proof Edition)
+// 3. CARD STACK (CRASH-PROOF EDITION)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
     const [mode, setMode] = useState("card"); 
@@ -315,11 +315,9 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const controls = useAnimation(); 
     
-    // SAFETY CHECK: Filter out bad data
-    const validQueue = queue.filter(q => q && q.lead_id);
-    const active = validQueue[0]; 
+    // 🛡️ CRASH GUARD: Ensure we have a valid lead to show
+    const active = queue.length > 0 ? queue[0] : null;
 
-    // If queue is empty (or became empty after filtering), show "All Caught Up"
     if(!active) return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
@@ -332,13 +330,14 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
     if(matched) activeTemplate = matched.text; 
     
+    // 🛡️ SAFE DATA ACCESS: Default values prevent undefined errors
     const [currentMessage, setCurrentMessage] = useState(
-        activeTemplate.replace("{{name}}", active.name || "").replace("{{context}}", active.context || "your update")
+        activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update")
     );
     
     useEffect(() => {
         if(active) {
-            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "").replace("{{context}}", active.context || "your update"));
+            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update"));
         }
     }, [active?.lead_id]);
 
@@ -396,6 +395,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         const d = new Date(); d.setDate(d.getDate() + days); 
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(active.context||"")}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
+        
         controls.start({ y: 500, opacity: 0 }).then(() => { 
             controls.set({ y: 0, opacity: 1 }); 
             fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); 
@@ -540,7 +540,7 @@ function ManualForm({ onBack, onSubmit, status }) {
 }
 
 // ==========================================
-// 5. CAMERA SCAN (Notification Fix)
+// 5. CAMERA SCAN (WITH VERIFY POPUP)
 // ==========================================
 function CameraScan({ onBack, onSubmit }) {
     const fileInputRef = useRef(null);
@@ -572,19 +572,24 @@ function CameraScan({ onBack, onSubmit }) {
                 .then(json => { 
                     setLoading(false);
                     if(json.data) {
-                        // Data Normalization directly in frontend to be safe
                         const raw = Array.isArray(json.data) ? json.data[0] : json.data;
-                        const lead = {
-                            name: raw.name || raw.Name || "Scanned Lead",
-                            phone: raw.phone || raw.Phone || "",
-                            email: raw.email || raw.Email || "",
-                            context: raw.context || raw.Context || "Card Scan"
-                        };
                         
-                        alert(`✅ Scanned!\nName: ${lead.name}\nPhone: ${lead.phone}`);
-                        onSubmit([lead]);
-                    } else {
-                        alert("❌ AI couldn't read the card. Try again."); 
+                        // 🧠 VERIFY STEP: Ask user to confirm/edit before saving
+                        const newName = prompt("Check Extracted Name:", raw.name || "Card Lead");
+                        const newPhone = prompt("Check Extracted Phone:", raw.phone || "");
+                        
+                        if(newName && newPhone) {
+                            onSubmit([{ 
+                                name: newName, 
+                                phone: newPhone, 
+                                context: "Card Scan", 
+                                email: raw.email || "" 
+                            }]);
+                        } else {
+                            alert("Scan Cancelled.");
+                        }
+                    } else { 
+                        alert("❌ AI couldn't read the card. Try again with better lighting."); 
                     }
                 })
                 .catch(err => {
@@ -603,13 +608,13 @@ function CameraScan({ onBack, onSubmit }) {
                 <div className="flex flex-col items-center animate-in fade-in">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mb-6"></div>
                     <h2 className="text-xl font-bold">Analysing Card...</h2>
-                    <p className="text-gray-400 text-sm mt-2">Extracting Name & Phone</p>
+                    <p className="text-gray-400 text-sm mt-2">AI is reading text.</p>
                 </div> 
             ) : (
                 <>
                     <Camera size={64} className="mb-6 text-orange-500"/>
                     <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                    <p className="text-gray-400 mb-8">Take a photo. AI will extract details.</p>
+                    <p className="text-gray-400 mb-8">Take a photo. AI will extract Name & Phone.</p>
                     <button onClick={() => fileInputRef.current.click()} className="w-full py-4 bg-orange-600 rounded-xl font-bold text-lg mb-4 shadow-lg active:scale-95 transition-transform">
                         Open Camera
                     </button>
@@ -840,7 +845,7 @@ function HotList({ clientId, onBack }) {
 }
 
 // ==========================================
-// 10. ADMIN DASHBOARD (FIXED LINK)
+// 10. ADMIN DASHBOARD
 // ==========================================
 function AdminDashboard() { 
     const [name, setName] = useState(""); 
@@ -984,7 +989,9 @@ function HelpScreen({ onBack }) {
     ); 
 }
 
-// 11. LANDING PAGE & HELPERS
+// ==========================================
+// 11. LANDING PAGE & MARKETING
+// ==========================================
 function LandingPage() { 
     return (
         <div className="min-h-screen bg-white flex flex-col font-sans text-gray-900">
