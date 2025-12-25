@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbwuzKDomPJ2mxeZA_x58lzSQYPteQ_y_Krm-ZNDhJZSGoo2c4sztI8zNU3xlcaH8Hr4JA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyuXZC0HveNKYuXUK_erSN8bgdePRmHtixPGE4Z7Ce1b9pxcaHCA4YE2ezYK15CRimA6Q/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "System Status: Online 🟢",
-    text: "AI Engine upgraded to Gemini 2.5 Flash for faster, error-free scanning.",
+    title: "System Restored 🟢",
+    text: "AI upgraded to Gemini 2.5. Card Scan now extracts Email & Company. Use the Camera icon!",
     type: "info" 
 };
 
@@ -65,6 +65,7 @@ function App() {
     try {
         const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) });
         const json = await res.json();
+        // 🛡️ DATA SAFETY
         if(json.data) { setQueue(json.data.queue || []); if(json.data.stats) setStats(json.data.stats); }
     } catch(e) { console.error("API Error", e); }
   };
@@ -93,11 +94,27 @@ function App() {
     }});
   };
 
+  // ROUTER LOGIC
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
   if (clientId === ADMIN_KEY) return <AdminDashboard />;
   if (!clientId) return <LandingPage />;
   
-  if(view === "menu") return <MenuScreen queue={queue} stats={stats} status={status} onViewChange={setView} onUpload={handleFileUpload} announcement={ANNOUNCEMENT} clientId={clientId} />;
+  if(view === "menu") return (
+      <MenuScreen 
+          queue={queue} 
+          stats={stats} 
+          status={status} 
+          onViewChange={(newView) => {
+              // 🛡️ STICKINESS FIX: Clear prefill when manually adding
+              if(newView === "manual") { setPrefillData(null); setStatus(""); }
+              setView(newView);
+          }} 
+          onUpload={handleFileUpload} 
+          announcement={ANNOUNCEMENT} 
+          clientId={clientId} 
+      />
+  );
+
   if(view === "hotlist") return <HotList clientId={clientId} onBack={() => setView("menu")} />;
   if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} onBack={() => { fetchQueue(clientId); setView("menu"); }} />;
   if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => setView("menu")} userProfile={userProfile} clientId={clientId} />;
@@ -130,7 +147,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK
+// 3. CARD STACK (CRASH-PROOF)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
     const [mode, setMode] = useState("card"); 
@@ -138,8 +155,22 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [file, setFile] = useState(null); 
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const controls = useAnimation(); 
+    
+    // 🛡️ CRASH GUARD: Ensure queue has valid items
     const active = queue.length > 0 ? queue[0] : null;
+    const [currentMessage, setCurrentMessage] = useState("");
 
+    // Effect: Update message on card change
+    useEffect(() => {
+        if(active) {
+            let activeTemplate = template; 
+            const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
+            if(matched) activeTemplate = matched.text; 
+            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update"));
+        }
+    }, [active?.lead_id]);
+
+    // 🛡️ RETURN AFTER HOOKS to prevent React errors
     if(!active) return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
@@ -147,20 +178,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             <button onClick={onBack} className="mt-8 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">Return to Menu</button>
         </div>
     ); 
-
-    let activeTemplate = template; 
-    const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
-    if(matched) activeTemplate = matched.text; 
-    
-    const [currentMessage, setCurrentMessage] = useState(
-        activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update")
-    );
-    
-    useEffect(() => {
-        if(active) {
-            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update"));
-        }
-    }, [active?.lead_id]);
 
     const handleAiRewrite = async (tone, lang) => {
         setPolyglotMenu(false);
@@ -220,18 +237,26 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
 }
 
 // ==========================================
-// 4. MANUAL FORM (With Email & Pre-Fill)
+// 4. MANUAL FORM (Sticky Fix + Email)
 // ==========================================
 function ManualForm({ onBack, onSubmit, status, prefill }) { 
-    // Initialize state with prefill data if available (e.g. from Camera)
-    const [name, setName] = useState(prefill?.name || ""); 
-    const [phone, setPhone] = useState(prefill?.phone || ""); 
-    const [email, setEmail] = useState(prefill?.email || "");
-    const [context, setContext] = useState(prefill?.context || ""); 
+    // State INIT based on prefill OR defaults
+    const [name, setName] = useState(prefill ? prefill.name : ""); 
+    const [phone, setPhone] = useState(prefill ? prefill.phone : ""); 
+    const [email, setEmail] = useState(prefill ? prefill.email : "");
+    const [context, setContext] = useState(prefill ? prefill.context : ""); 
     const [listening, setListening] = useState(false);
 
+    // 🛡️ EFFECT: Update state if prefill changes (for Camera Scan)
+    useEffect(() => {
+        if(prefill) {
+            setName(prefill.name); setPhone(prefill.phone); 
+            setEmail(prefill.email); setContext(prefill.context);
+        }
+    }, [prefill]);
+
     const toggleMic = () => {
-        if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported in this browser. Use Chrome.");
+        if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported. Use Chrome.");
         const recognition = new window.webkitSpeechRecognition();
         recognition.continuous = false; recognition.lang = 'en-IN';
         recognition.onstart = () => setListening(true);
@@ -248,7 +273,8 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
             email: email || "",
             context: context || "Lead" 
         }); 
-        setName(""); setPhone(""); setContext(""); 
+        // Explicitly clear form after submit
+        setName(""); setPhone(""); setEmail(""); setContext("");
     }; 
     
     return (
@@ -295,7 +321,10 @@ function CameraScan({ onBack, onScanComplete }) {
                 .then(r => r.json())
                 .then(json => { 
                     setLoading(false);
-                    if(json.data) {
+                    // 🛡️ ERROR HANDLING FOR QUOTA
+                    if(json.status === "error") {
+                        alert("❌ AI Error: " + json.message);
+                    } else if(json.data) {
                         const raw = Array.isArray(json.data) ? json.data[0] : json.data;
                         // Instead of saving, send data to the Manual Form for verification
                         onScanComplete({ 
@@ -304,14 +333,9 @@ function CameraScan({ onBack, onScanComplete }) {
                             email: raw.email || "",
                             context: raw.context || "Card Scan" 
                         });
-                    } else { 
-                        alert("❌ AI couldn't read the card. Try again."); 
-                    }
+                    } else { alert("❌ AI couldn't read the card. Try again."); }
                 })
-                .catch(err => {
-                    setLoading(false);
-                    alert("Error: " + err.message);
-                });
+                .catch(err => { setLoading(false); alert("Error: " + err.message); });
             };
             img.src = readerEvent.target.result;
         };
@@ -341,7 +365,7 @@ function CameraScan({ onBack, onScanComplete }) {
 }
 
 // ==========================================
-// 6. BULK PASTE (Restored Notifications)
+// 6. BULK PASTE (NOTIFICATIONS RESTORED)
 // ==========================================
 function BulkPasteForm({ onBack, onSubmit }) { 
     const [text, setText] = useState(""); 
@@ -354,9 +378,13 @@ function BulkPasteForm({ onBack, onSubmit }) {
         try {
             const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) });
             const json = await res.json();
-            if(json.data) {
+            
+            // 🛡️ EXPLICIT NOTIFICATION & ERROR HANDLING
+            if(json.status === "error") {
+                alert("❌ AI Error: " + json.message);
+            } else if(json.data) {
                 setParsed(json.data);
-                alert(`✅ AI Found ${json.data.length} Leads!`);
+                alert(`✅ AI Found ${json.data.length} Leads! Scroll to review.`);
             }
         } catch(e) { alert("AI Error: " + e.message); }
         setLoading(false);
@@ -412,7 +440,6 @@ function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRe
         <div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto">
             <button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button>
             <h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1>
-            
             <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100">
                 <h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2>
                 <div className="space-y-3">
@@ -422,23 +449,17 @@ function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRe
                     <button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button>
                 </div>
             </div>
-
             <h2 className="font-bold text-sm mb-2">Message Template</h2>
             <textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" />
             <button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button>
-            
             <div className="flex gap-2 mb-4">
                 <input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/>
                 <button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button>
             </div>
-            
             <div className="space-y-3 pb-24">
                 {library.map(t => (
                     <div key={t.id} className="p-3 border rounded-xl flex items-center justify-between">
-                        <div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1">
-                            <div className="font-bold">{t.name}</div>
-                            <div className="text-xs text-gray-400 truncate w-48">{t.text}</div>
-                        </div>
+                        <div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div>
                         <button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button>
                     </div>
                 ))}
