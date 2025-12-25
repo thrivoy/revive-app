@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbyuXZC0HveNKYuXUK_erSN8bgdePRmHtixPGE4Z7Ce1b9pxcaHCA4YE2ezYK15CRimA6Q/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxYcl9ibOKMBC0cXVtjGyvOYLdCnAOMYNIiInpcdIUnLl-vHQuM7hVZfRGB7RAvKPCkMQ/exec"
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "System Restored 🟢",
-    text: "AI upgraded to Gemini 2.5. Card Scan now extracts Email & Company. Use the Camera icon!",
+    title: "AI Power Unlocked 🧠",
+    text: "AI Card Scan now extracts Email & Company. We added a verification step so you can fix typos before saving!",
     type: "info" 
 };
 
@@ -147,20 +147,21 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK (CRASH-PROOF)
+// 3. CARD STACK (CRASH-PROOF V2)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
+    // 🛡️ CRITICAL FIX: ALL HOOKS MUST RUN UNCONDITIONALLY AT THE TOP
     const [mode, setMode] = useState("card"); 
     const [actionType, setActionType] = useState("whatsapp");
     const [file, setFile] = useState(null); 
     const [polyglotMenu, setPolyglotMenu] = useState(false);
+    const [currentMessage, setCurrentMessage] = useState("");
     const controls = useAnimation(); 
     
-    // 🛡️ CRASH GUARD: Ensure queue has valid items
+    // Derived state
     const active = queue.length > 0 ? queue[0] : null;
-    const [currentMessage, setCurrentMessage] = useState("");
 
-    // Effect: Update message on card change
+    // Effect: Update message when active card changes (safe dependency)
     useEffect(() => {
         if(active) {
             let activeTemplate = template; 
@@ -168,9 +169,9 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             if(matched) activeTemplate = matched.text; 
             setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update"));
         }
-    }, [active?.lead_id]);
+    }, [active, template, library]);
 
-    // 🛡️ RETURN AFTER HOOKS to prevent React errors
+    // 🛡️ EARLY RETURN ONLY AFTER HOOKS ARE DEFINED
     if(!active) return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
@@ -252,6 +253,9 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
         if(prefill) {
             setName(prefill.name); setPhone(prefill.phone); 
             setEmail(prefill.email); setContext(prefill.context);
+        } else {
+            // If prefill is null (e.g. fresh Add One), clear everything
+            setName(""); setPhone(""); setEmail(""); setContext("");
         }
     }, [prefill]);
 
@@ -273,7 +277,7 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
             email: email || "",
             context: context || "Lead" 
         }); 
-        // Explicitly clear form after submit
+        // Force clear after submit
         setName(""); setPhone(""); setEmail(""); setContext("");
     }; 
     
@@ -384,6 +388,7 @@ function BulkPasteForm({ onBack, onSubmit }) {
                 alert("❌ AI Error: " + json.message);
             } else if(json.data) {
                 setParsed(json.data);
+                // 🔊 NOTIFICATION
                 alert(`✅ AI Found ${json.data.length} Leads! Scroll to review.`);
             }
         } catch(e) { alert("AI Error: " + e.message); }
