@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbxYcl9ibOKMBC0cXVtjGyvOYLdCnAOMYNIiInpcdIUnLl-vHQuM7hVZfRGB7RAvKPCkMQ/exec"
+const API_URL = "https://script.google.com/macros/s/AKfycbweD_jC70j0ppwx8Gv5dn_DJ-nC2e6aN5m5TIuMCS1WXy332maGMWdY0zhxvEfnkbxGUA/exec"
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "AI Power Unlocked 🧠",
-    text: "AI Card Scan now extracts Email & Company. We added a verification step so you can fix typos before saving!",
+    title: "System Restored 🟢",
+    text: "Scan fix applied. AI Paste alerts restored. Swipe away!",
     type: "info" 
 };
 
@@ -65,7 +65,6 @@ function App() {
     try {
         const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) });
         const json = await res.json();
-        // 🛡️ DATA SAFETY
         if(json.data) { setQueue(json.data.queue || []); if(json.data.stats) setStats(json.data.stats); }
     } catch(e) { console.error("API Error", e); }
   };
@@ -94,7 +93,6 @@ function App() {
     }});
   };
 
-  // ROUTER LOGIC
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
   if (clientId === ADMIN_KEY) return <AdminDashboard />;
   if (!clientId) return <LandingPage />;
@@ -105,7 +103,6 @@ function App() {
           stats={stats} 
           status={status} 
           onViewChange={(newView) => {
-              // 🛡️ STICKINESS FIX: Clear prefill when manually adding
               if(newView === "manual") { setPrefillData(null); setStatus(""); }
               setView(newView);
           }} 
@@ -147,10 +144,9 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 // ==========================================
-// 3. CARD STACK (CRASH-PROOF V2)
+// 3. CARD STACK (ANIMATION RESET FIX)
 // ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
-    // 🛡️ CRITICAL FIX: ALL HOOKS MUST RUN UNCONDITIONALLY AT THE TOP
     const [mode, setMode] = useState("card"); 
     const [actionType, setActionType] = useState("whatsapp");
     const [file, setFile] = useState(null); 
@@ -158,12 +154,16 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [currentMessage, setCurrentMessage] = useState("");
     const controls = useAnimation(); 
     
-    // Derived state
+    // Active Lead
     const active = queue.length > 0 ? queue[0] : null;
 
-    // Effect: Update message when active card changes (safe dependency)
+    // ⚡️ CRITICAL FIX: RESET ANIMATION WHEN NEW CARD LOADS
     useEffect(() => {
         if(active) {
+            // 1. Reset Animation to Center (Visible)
+            controls.set({ x: 0, y: 0, opacity: 1 });
+
+            // 2. Update Template Text
             let activeTemplate = template; 
             const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
             if(matched) activeTemplate = matched.text; 
@@ -171,7 +171,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         }
     }, [active, template, library]);
 
-    // 🛡️ EARLY RETURN ONLY AFTER HOOKS ARE DEFINED
     if(!active) return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
@@ -202,13 +201,26 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         }
     };
 
-    const submitOutcome = (tag) => { controls.start({ x: 500, opacity: 0 }).then(() => { controls.set({ x: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) }); setQueue(q => q.slice(1)); setMode("card"); }); };
+    const submitOutcome = (tag) => { 
+        // Animate Out
+        controls.start({ x: 500, opacity: 0 }).then(() => { 
+            // Mark Sent
+            fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) }); 
+            // Remove from local queue -> Triggers useEffect above -> Resets animation
+            setQueue(q => q.slice(1)); 
+            setMode("card"); 
+        }); 
+    };
     
     const addToCalendar = (days) => { 
         const d = new Date(); d.setDate(d.getDate() + days); 
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(active.context||"")}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
-        controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); setQueue(q => q.slice(1)); setMode("card"); });
+        controls.start({ y: 500, opacity: 0 }).then(() => { 
+            fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); 
+            setQueue(q => q.slice(1)); 
+            setMode("card"); 
+        });
     };
 
     if(mode === "disposition") return (
@@ -241,20 +253,17 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
 // 4. MANUAL FORM (Sticky Fix + Email)
 // ==========================================
 function ManualForm({ onBack, onSubmit, status, prefill }) { 
-    // State INIT based on prefill OR defaults
     const [name, setName] = useState(prefill ? prefill.name : ""); 
     const [phone, setPhone] = useState(prefill ? prefill.phone : ""); 
     const [email, setEmail] = useState(prefill ? prefill.email : "");
     const [context, setContext] = useState(prefill ? prefill.context : ""); 
     const [listening, setListening] = useState(false);
 
-    // 🛡️ EFFECT: Update state if prefill changes (for Camera Scan)
     useEffect(() => {
         if(prefill) {
             setName(prefill.name); setPhone(prefill.phone); 
             setEmail(prefill.email); setContext(prefill.context);
         } else {
-            // If prefill is null (e.g. fresh Add One), clear everything
             setName(""); setPhone(""); setEmail(""); setContext("");
         }
     }, [prefill]);
@@ -277,7 +286,6 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
             email: email || "",
             context: context || "Lead" 
         }); 
-        // Force clear after submit
         setName(""); setPhone(""); setEmail(""); setContext("");
     }; 
     
@@ -325,12 +333,10 @@ function CameraScan({ onBack, onScanComplete }) {
                 .then(r => r.json())
                 .then(json => { 
                     setLoading(false);
-                    // 🛡️ ERROR HANDLING FOR QUOTA
                     if(json.status === "error") {
                         alert("❌ AI Error: " + json.message);
                     } else if(json.data) {
                         const raw = Array.isArray(json.data) ? json.data[0] : json.data;
-                        // Instead of saving, send data to the Manual Form for verification
                         onScanComplete({ 
                             name: raw.name || "Card Lead", 
                             phone: raw.phone || "", 
@@ -383,12 +389,10 @@ function BulkPasteForm({ onBack, onSubmit }) {
             const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) });
             const json = await res.json();
             
-            // 🛡️ EXPLICIT NOTIFICATION & ERROR HANDLING
             if(json.status === "error") {
                 alert("❌ AI Error: " + json.message);
             } else if(json.data) {
                 setParsed(json.data);
-                // 🔊 NOTIFICATION
                 alert(`✅ AI Found ${json.data.length} Leads! Scroll to review.`);
             }
         } catch(e) { alert("AI Error: " + e.message); }
