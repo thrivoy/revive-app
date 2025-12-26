@@ -12,14 +12,14 @@ import {
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp
 } from 'lucide-react';
 
-// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbwUo_K96Kjy1j5Mr1IrwvE_eCigJxK46k7QZ7VNKD-5soGwK1amu1IWcaVX8MYlu3xW2A/exec";
+// ⚠️ PASTE YOUR NEW URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbxplr7uEkR3ECHGJPITshhwM7UGp-6SDMBlKHJiPtvDdtppISFWGRJStSZJfGCaOupIRg/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "System Optimized 🚀",
-    text: "Duplicate protection active. Manual Form is now mobile-friendly.",
+    title: "AI Upgrade 🧠",
+    text: "Clean Messages: The AI now separates the customer's title/company from the message context.",
     type: "info" 
 };
 
@@ -74,21 +74,14 @@ function App() {
     try {
         const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) });
         const json = await res.json();
-        
         if(json.status === "error" && json.message === "LIMIT_REACHED") {
             alert("🔒 LIMIT REACHED!\n\nUpgrade to Pro to add more.");
             setStatus("");
         } else {
             const skipped = json.duplicates_skipped || 0;
             const added = json.count || 0;
-            
-            if(skipped > 0) {
-                alert(`✅ Successfully Saved: ${added}\n🛡️ Duplicates Skipped: ${skipped}`);
-            } else {
-                setStatus("Saved!");
-                setTimeout(() => setStatus(""), 2000);
-            }
-            
+            if(skipped > 0) alert(`✅ Saved: ${added}\n🛡️ Duplicates Skipped: ${skipped}`);
+            setStatus("Saved!");
             fetchQueue(clientId); 
             setView("menu");
         }
@@ -99,15 +92,20 @@ function App() {
     setStatus("Parsing CSV...");
     Papa.parse(e.target.files[0], { header: true, complete: async (results) => {
         const leads = results.data.filter(row => row.Phone).map(row => {
+            // CSV DATA PACKING: Intent ||| Identity
             let ctx = row.Context || "Follow Up";
-            if(row.Company) ctx = `[${row.Company}] ` + ctx;
-            if(row.Website) ctx = ctx + ` (${row.Website})`;
+            let badge = [];
+            if(row.Company) badge.push(row.Company);
+            if(row.Website) badge.push(row.Website);
+            
+            let finalContext = ctx;
+            if(badge.length > 0) finalContext = `${ctx} ||| ${badge.join(" • ")}`;
 
             return { 
                 name: row.Name || "Customer", 
                 phone: "91" + row.Phone.replace(/\D/g,'').slice(-10), 
                 email: row.Email || "", 
-                context: ctx 
+                context: finalContext
             };
         });
         handleBulkSubmit(leads);
@@ -160,10 +158,18 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     useEffect(() => {
         if(active) {
             controls.set({ x: 0, y: 0, opacity: 1 });
+            
+            // 🧠 SPLIT BRAIN LOGIC
+            // Context comes as: "Intent ||| Identity"
+            const parts = (active.context || "").split(" ||| ");
+            const intent = parts[0] || ""; // For the message
+            
             let activeTemplate = template; 
-            const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
+            const matched = library.find(t => intent.toLowerCase().includes(t.name.toLowerCase())); 
             if(matched) activeTemplate = matched.text; 
-            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", active.context || "your update"));
+            
+            // Generate clean message
+            setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", intent || "your update"));
         }
     }, [active, template, library]);
 
@@ -175,11 +181,16 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         </div>
     ); 
 
+    // UI Logic: Split context for display
+    const parts = (active.context || "").split(" ||| ");
+    const intent = parts[0] || "";
+    const identity = parts[1] || "";
+
     const handleAiRewrite = async (tone, lang) => {
         setPolyglotMenu(false);
         const res = await fetch(API_URL, { 
             method: 'POST', 
-            body: JSON.stringify({ action: "AI_REWRITE_MSG", payload: { context: active.context, current_msg: currentMessage, tone, lang } }) 
+            body: JSON.stringify({ action: "AI_REWRITE_MSG", payload: { context: intent, current_msg: currentMessage, tone, lang } }) 
         });
         const json = await res.json();
         if(json.data) setCurrentMessage(json.data);
@@ -201,7 +212,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     
     const addToCalendar = (days) => { 
         const d = new Date(); d.setDate(d.getDate() + days); 
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(active.context||"")}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(intent)}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
         controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); setQueue(q => q.slice(1)); setMode("card"); });
     };
@@ -221,7 +232,15 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8">
                 <div className="space-y-4 flex-1 flex flex-col min-h-0 relative">
                    {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
-                   <div className="relative shrink-0"><input value={active.context} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value; setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
+                   
+                   {/* IDENTITY BADGE: Shows Company/Title clearly at top */}
+                   {identity && (
+                       <div className="bg-purple-50 text-purple-900 px-3 py-1 rounded-full text-xs font-bold inline-block self-start border border-purple-100 flex items-center gap-2">
+                           <Briefcase size={12}/> {identity}
+                       </div>
+                   )}
+
+                   <div className="relative shrink-0"><input value={intent} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value + (identity ? " ||| " + identity : ""); setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
                    <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone}</div></div>
                    {actionType === 'whatsapp' ? (<textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none h-32" />) : (<div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 flex-1 flex items-center justify-center font-bold border border-blue-100">📞 Power Dialer Mode Active</div>)}
                    {actionType === 'whatsapp' && (<label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label>)}
@@ -262,9 +281,13 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
     const handleSubmit = () => { 
         if(!phone) return alert("Phone is required"); 
         
+        // DATA PACKING: Intent ||| Identity
+        let badge = [];
+        if(company) badge.push(company);
+        if(website) badge.push(website);
+        
         let finalContext = context;
-        if(company) finalContext = `[${company}] ` + finalContext;
-        if(website) finalContext = finalContext + ` (${website})`;
+        if(badge.length > 0) finalContext = `${context} ||| ${badge.join(" • ")}`;
 
         onSubmit({ 
             name: name || "Customer", 
