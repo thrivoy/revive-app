@@ -19,7 +19,7 @@ const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
     title: "System Optimized 🚀",
-    text: "Duplicate protection active. Card Scan & Manual Entry now support Company & Website details.",
+    text: "Duplicate protection active. Manual Form is now mobile-friendly.",
     type: "info" 
 };
 
@@ -159,6 +159,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
 
     useEffect(() => {
         if(active) {
+            controls.set({ x: 0, y: 0, opacity: 1 });
             let activeTemplate = template; 
             const matched = library.find(t => (active.context || "").toLowerCase().includes(t.name.toLowerCase())); 
             if(matched) activeTemplate = matched.text; 
@@ -214,7 +215,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     );
 
     return (
-        <div className="h-screen flex flex-col items-center justify-center p-4 max-w-sm mx-auto relative">
+        <div className="h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative">
             <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20}/></button>
             <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex"><button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button><button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button></div>
             <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8">
@@ -282,9 +283,9 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
             <div className="space-y-4">
                 <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
                 <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
-                <div className="flex gap-2">
-                    <input value={company} onChange={e=>setCompany(e.target.value)} className="flex-1 p-3 bg-gray-50 rounded-lg border" placeholder="Company" />
-                    <input value={website} onChange={e=>setWebsite(e.target.value)} className="flex-1 p-3 bg-gray-50 rounded-lg border" placeholder="Website" />
+                <div className="flex flex-col gap-4">
+                    <input value={company} onChange={e=>setCompany(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Company" />
+                    <input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Website" />
                 </div>
                 <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Email (Optional)" />
                 <div className="relative">
