@@ -12,14 +12,14 @@ import {
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, Briefcase
 } from 'lucide-react';
 
-// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbxPb-ck1NcQbU67ceR0iaLn-cCeETMf3iB5XY9xJPRfK_uaOPTgpsBdGKsWcGie5_rDcQ/exec";
+// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbzF_JmgJXcgCzrIt9wowtl1PnGFOh8bz3CiVqiCuU8l9IrJl7EtLu7-gCW6R-TygUgE6g/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
     title: "System Optimized 🚀",
-    text: "AI Scan is now smarter: Context & Company are separated for better messages.",
+    text: "Duplicate protection active. Card Scan & Manual Entry now support Company & Website details.",
     type: "info" 
 };
 
@@ -99,12 +99,10 @@ function App() {
     setStatus("Parsing CSV...");
     Papa.parse(e.target.files[0], { header: true, complete: async (results) => {
         const leads = results.data.filter(row => row.Phone).map(row => {
-            // 🧠 CSV DATA PACKING: Intent ||| Identity
             let ctx = row.Context || "Follow Up";
             let badge = [];
             if(row.Company) badge.push(row.Company);
             if(row.Website) badge.push(row.Website);
-            
             let finalContext = ctx;
             if(badge.length > 0) finalContext = `${ctx} ||| ${badge.join(" • ")}`;
 
@@ -139,9 +137,6 @@ function App() {
   return <div className="h-screen flex items-center justify-center">Loading Thrivoy...</div>;
 }
 
-// ==========================================
-// 2. MENU SCREEN
-// ==========================================
 function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement, clientId }) {
     const shareMyCard = () => { const url = `${window.location.origin}/?u=${clientId}`; if (navigator.share) navigator.share({ title: 'My Digital Card', url }); else window.open(`https://wa.me/?text=${encodeURIComponent(url)}`); };
     return (
@@ -158,11 +153,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
     );
 }
 
-// ==========================================
-// 3. CARD STACK (CRASH-PROOF V3 + SPLIT BRAIN)
-// ==========================================
 function CardStack({ queue, setQueue, template, library, onBack }) { 
-    // 🛡️ HOOKS ALWAYS RUN FIRST
     const [mode, setMode] = useState("card"); 
     const [actionType, setActionType] = useState("whatsapp");
     const [file, setFile] = useState(null); 
@@ -170,10 +161,8 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [currentMessage, setCurrentMessage] = useState("");
     const controls = useAnimation(); 
     
-    // Derived state
     const active = queue.length > 0 ? queue[0] : null;
 
-    // Effect: Update message when active card changes (safe dependency)
     useEffect(() => {
         if(active) {
             controls.set({ x: 0, y: 0, opacity: 1 });
@@ -187,12 +176,10 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             const matched = library.find(t => intent.toLowerCase().includes(t.name.toLowerCase())); 
             if(matched) activeTemplate = matched.text; 
             
-            // Generate clean message
             setCurrentMessage(activeTemplate.replace("{{name}}", active.name || "Customer").replace("{{context}}", intent || "your update"));
         }
     }, [active, template, library]);
 
-    // 🛡️ SAFE RETURN AFTER HOOKS
     if(!active) return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
             <div className="text-6xl mb-6">🎉</div>
@@ -246,10 +233,14 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     );
 
     return (
-        <div className="h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative">
+        <div className="h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative overflow-hidden">
             <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20}/></button>
             <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex"><button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button><button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button></div>
-            <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8">
+            <motion.div 
+                animate={controls} 
+                className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8 mx-auto"
+                style={{ position: 'relative', left: 0, right: 0 }}
+            >
                 <div className="space-y-4 flex-1 flex flex-col min-h-0 relative">
                    {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
                    
@@ -271,23 +262,24 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     ); 
 }
 
-// ==========================================
-// 4. MANUAL FORM (MOBILE OPTIMIZED: STACKED INPUTS)
-// ==========================================
 function ManualForm({ onBack, onSubmit, status, prefill }) { 
-    const [name, setName] = useState(prefill ? prefill.name : ""); 
-    const [phone, setPhone] = useState(prefill ? prefill.phone : ""); 
-    const [email, setEmail] = useState(prefill ? prefill.email : "");
-    const [company, setCompany] = useState(prefill ? prefill.company : ""); 
-    const [website, setWebsite] = useState(prefill ? prefill.website : ""); 
-    const [context, setContext] = useState(prefill ? prefill.context : ""); 
+    // 🛡️ SAFE INITIALIZATION: Guarantee non-null values
+    const [name, setName] = useState(prefill ? (prefill.name || "") : ""); 
+    const [phone, setPhone] = useState(prefill ? (prefill.phone || "") : ""); 
+    const [email, setEmail] = useState(prefill ? (prefill.email || "") : "");
+    const [company, setCompany] = useState(prefill ? (prefill.company || "") : ""); 
+    const [website, setWebsite] = useState(prefill ? (prefill.website || "") : ""); 
+    const [context, setContext] = useState(prefill ? (prefill.context || "") : ""); 
     const [listening, setListening] = useState(false);
 
     useEffect(() => {
         if(prefill) {
-            setName(prefill.name); setPhone(prefill.phone); 
-            setEmail(prefill.email); setCompany(prefill.company); 
-            setWebsite(prefill.website); setContext(prefill.context);
+            setName(prefill.name || ""); 
+            setPhone(prefill.phone || ""); 
+            setEmail(prefill.email || ""); 
+            setCompany(prefill.company || ""); 
+            setWebsite(prefill.website || ""); 
+            setContext(prefill.context || "");
         }
     }, [prefill]);
 
@@ -304,7 +296,6 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
     const handleSubmit = () => { 
         if(!phone) return alert("Phone is required"); 
         
-        // 🧠 DATA PACKING: Intent ||| Identity
         let badge = [];
         if(company) badge.push(company);
         if(website) badge.push(website);
@@ -402,9 +393,34 @@ function BulkPasteForm({ onBack, onSubmit }) {
     const [text, setText] = useState(""); 
     const [parsed, setParsed] = useState([]); 
     const [loading, setLoading] = useState(false); 
-    const handleSmartScan = async () => { if(!text) return; setLoading(true); try { const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); const json = await res.json(); if(json.data) { setParsed(json.data); alert(`✅ AI Found ${json.data.length} Leads!`); } } catch(e) { alert("AI Error: " + e.message); } setLoading(false); };
+    
+    const handleSmartScan = async () => { 
+        if(!text) return; 
+        setLoading(true); 
+        const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI is taking too long. Paste less text and try again."); } }, 15000);
+
+        try { 
+            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); 
+            const json = await res.json(); 
+            clearTimeout(timeoutId);
+            
+            if(json.status === "error") { 
+                alert("❌ AI Error: " + json.message); 
+            } else if(json.data) { 
+                setParsed(json.data); 
+                alert(`✅ AI Found ${json.data.length} Leads!`); 
+            } 
+        } catch(e) { 
+            clearTimeout(timeoutId);
+            alert("AI Error: " + e.message); 
+        } 
+        setLoading(false); 
+    };
+
     const handleSave = async () => { await onSubmit(parsed); }; 
+    
     if(parsed.length > 0) return (<div className="h-screen bg-white flex flex-col p-4"><div className="flex justify-between mb-4 items-center"><h2 className="font-bold">Found {parsed.length}</h2><button onClick={handleSave} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow">Save All</button></div><div className="flex-1 overflow-y-auto space-y-2">{parsed.map((l, i) => (<div key={i} className="p-3 border rounded-xl bg-gray-50"><div className="font-bold">{l.name}</div><div className="text-xs text-gray-500">{l.phone} • {l.email}</div><div className="text-xs text-blue-600 italic">{l.context}</div></div>))}</div></div>);
+    
     return (<div className="p-6 max-w-md mx-auto h-screen bg-white flex flex-col"><button onClick={onBack} className="text-gray-400 mb-4 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-black text-gray-800 mb-2">AI Smart Scan 🧠</h1><p className="text-sm text-gray-500 mb-4">Paste messy text.</p><textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. Rahul 988822222 from Acme Corp..." className="flex-1 w-full p-4 bg-gray-50 rounded-xl border outline-none font-mono text-sm mb-4"/><button onClick={handleSmartScan} disabled={!text || loading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2">{loading ? "AI is Thinking..." : "Extract Leads"}</button></div>); 
 }
 
