@@ -9,19 +9,57 @@ import {
   Wand2, HelpCircle, Info, CheckSquare, Square, 
   Play, UserMinus, Mail, Clock, Flame, ThumbsUp, 
   Snowflake, UserCheck, ShieldCheck, Camera, Mic, 
-  Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, Briefcase
+  Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, Briefcase, WifiOff
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbwFyhVyyCyYPPfw2qkma7DQFugxQjai93QFFYMqDN133Hk1DDPT9mLk1Zd88cqQro0ouQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwWoueuAHRC_4ENzPyP_8F69GSsR6HunVpEtxWnxf-EuIOS8iOHMgHPszNFZHNxk9uWvA/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "System Optimized 🚀",
-    text: "Duplicate protection active. Card Scan & Manual Entry now support Company & Website details.",
+    title: "System Ready 🟢",
+    text: "AI upgraded. Duplicate protection active. Email mode enabled.",
     type: "info" 
 };
+
+// 🛡️ HELPER: Network Request with Retry & Timeout
+const fetchWithRetry = async (url, options, retries = 2) => {
+    try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 20000); // 20s Timeout
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        if(!res.ok) throw new Error("HTTP Error");
+        return res;
+    } catch(e) {
+        if(retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            return fetchWithRetry(url, options, retries - 1);
+        }
+        throw e;
+    }
+};
+
+// 🛡️ COMPONENT: Error Boundary
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
+          <div className="bg-white p-8 rounded-2xl shadow-xl">
+            <h2 className="text-xl font-bold text-red-600 mb-2">Something went wrong.</h2>
+            <p className="text-gray-500 mb-6 text-sm">The app encountered a glitch.</p>
+            <button onClick={() => window.location.reload()} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold">Reload App</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ==========================================
 // 1. MAIN APP ROUTER
@@ -35,6 +73,7 @@ function App() {
   const [userProfile, setUserProfile] = useState(null); 
   const [status, setStatus] = useState("");
   const [prefillData, setPrefillData] = useState(null); 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [template, setTemplate] = useState(() => localStorage.getItem("revive_active_template") || "Hi {{name}}, regarding {{context}}.");
   const [library, setLibrary] = useState(() => JSON.parse(localStorage.getItem("revive_library") || "[]"));
@@ -42,6 +81,11 @@ function App() {
   useEffect(() => { localStorage.setItem("revive_active_template", template); }, [template]);
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const params = new URLSearchParams(window.location.search);
     const key = params.get("key"); 
     const user = params.get("u"); 
@@ -51,9 +95,14 @@ function App() {
     } else if (key) {
         setClientId(key); 
         fetchQueue(key); 
-        fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: key } }) })
-            .then(r=>r.json()).then(j => { if(j.data) setUserProfile(j.data); });
+        fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: key } }) })
+            .then(r=>r.json()).then(j => { if(j.data) setUserProfile(j.data); })
+            .catch(e => console.error("Profile Error", e));
     }
+    return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const saveActiveTemplate = (newTemp) => { setTemplate(newTemp); localStorage.setItem("revive_active_template", newTemp); };
@@ -63,7 +112,7 @@ function App() {
   const fetchQueue = async (id) => {
     if(id === ADMIN_KEY) return; 
     try {
-        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) });
+        const res = await fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } }) });
         const json = await res.json();
         if(json.data) { setQueue(json.data.queue || []); if(json.data.stats) setStats(json.data.stats); }
     } catch(e) { console.error("API Error", e); }
@@ -72,7 +121,7 @@ function App() {
   const handleBulkSubmit = async (leads) => {
     setStatus(`Saving ${leads.length} leads...`);
     try {
-        const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) });
+        const res = await fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_LEADS", payload: { client_id: clientId, leads: leads } }) });
         const json = await res.json();
         
         if(json.status === "error" && json.message === "LIMIT_REACHED") {
@@ -117,6 +166,8 @@ function App() {
     }});
   };
 
+  if (!isOnline) return <div className="h-screen flex flex-col items-center justify-center p-6 text-center"><WifiOff size={48} className="text-gray-300 mb-4"/><h2 className="text-xl font-bold text-gray-800">You are Offline</h2><p className="text-gray-500">Check your internet connection.</p></div>;
+
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
   if (clientId === ADMIN_KEY) return <AdminDashboard />;
   if (!clientId) return <LandingPage />;
@@ -126,9 +177,7 @@ function App() {
   if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} onBack={() => { fetchQueue(clientId); setView("menu"); }} />;
   if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => setView("menu")} userProfile={userProfile} clientId={clientId} />;
   if(view === "list") return <QueueList queue={queue} setQueue={setQueue} library={library} onBack={() => setView("menu")} onLaunchStack={() => setView("stack")} />;
-  
   if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} prefill={prefillData} />;
-  
   if(view === "bulk") return <BulkPasteForm onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />;
   if(view === "help") return <HelpScreen onBack={() => setView("menu")} />;
   if(view === "camera") return <CameraScan onBack={() => setView("menu")} onScanComplete={(data) => { setPrefillData(data); setView("manual"); }} />;
@@ -153,24 +202,21 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 function CardStack({ queue, setQueue, template, library, onBack }) { 
-    // 🛡️ HOOKS ALWAYS RUN FIRST
     const [mode, setMode] = useState("card"); 
     const [actionType, setActionType] = useState("whatsapp");
     const [file, setFile] = useState(null); 
     const [polyglotMenu, setPolyglotMenu] = useState(false);
     const [currentMessage, setCurrentMessage] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false); // 🚀 LOADING STATE
     const controls = useAnimation(); 
     
-    // Derived state
     const active = queue.length > 0 ? queue[0] : null;
 
     useEffect(() => {
         if(active) {
             controls.set({ x: 0, y: 0, opacity: 1 });
-            
-            // 🧠 SPLIT BRAIN LOGIC
             const parts = (active.context || "").split(" ||| ");
-            const intent = parts[0] || ""; // For the message
+            const intent = parts[0] || "";
             
             let activeTemplate = template; 
             const matched = library.find(t => intent.toLowerCase().includes(t.name.toLowerCase())); 
@@ -188,14 +234,13 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         </div>
     ); 
 
-    // UI Logic: Split context for display
     const parts = (active.context || "").split(" ||| ");
     const intent = parts[0] || "";
     const identity = parts[1] || "";
 
     const handleAiRewrite = async (tone, lang) => {
         setPolyglotMenu(false);
-        const res = await fetch(API_URL, { 
+        const res = await fetchWithRetry(API_URL, { 
             method: 'POST', 
             body: JSON.stringify({ action: "AI_REWRITE_MSG", payload: { context: intent, current_msg: currentMessage, tone, lang } }) 
         });
@@ -207,7 +252,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         if (actionType === 'call') { 
             window.open(`tel:${active.phone}`, '_self'); setMode("disposition"); 
         } 
-        // 📧 NEW: EMAIL HANDLING
         else if (actionType === 'email') {
             if(active.email) {
                 window.open(`mailto:${active.email}?subject=${encodeURIComponent(intent)}`, '_blank');
@@ -225,24 +269,37 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         }
     };
 
-    const submitOutcome = (tag) => { controls.start({ x: 500, opacity: 0 }).then(() => { controls.set({ x: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) }); setQueue(q => q.slice(1)); setMode("card"); }); };
+    const submitOutcome = async (tag) => {
+        setIsSubmitting(true);
+        await controls.start({ x: 500, opacity: 0 });
+        controls.set({ x: 0, opacity: 1 });
+        
+        try {
+            fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: active.lead_id, outcome: tag } }) });
+        } catch(e) {
+            console.error(e); 
+        }
+        
+        setQueue(q => q.slice(1)); 
+        setMode("card");
+        setIsSubmitting(false);
+    };
     
     const addToCalendar = (days) => { 
         const d = new Date(); d.setDate(d.getDate() + days); 
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(intent)}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
-        controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); setQueue(q => q.slice(1)); setMode("card"); });
+        controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "SNOOZE_LEAD", payload: { lead_id: active.lead_id, date: d.toISOString().split('T')[0] } }) }); setQueue(q => q.slice(1)); setMode("card"); });
     };
 
     if(mode === "disposition") return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Outcome?</h2><div className="grid gap-4 w-full max-w-xs"><button onClick={() => submitOutcome("Hot")} className="bg-orange-500 p-4 rounded-xl font-bold flex gap-3 justify-center"><Flame/> Hot Lead</button><button onClick={() => submitOutcome("Interested")} className="bg-blue-600 p-4 rounded-xl font-bold flex gap-3 justify-center"><ThumbsUp/> Interested</button><button onClick={() => submitOutcome("No Answer")} className="bg-slate-700 p-4 rounded-xl font-bold flex gap-3 justify-center"><Snowflake/> No Answer / Cold</button></div></div>
+        <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Outcome?</h2><div className="grid gap-4 w-full max-w-xs"><button onClick={() => submitOutcome("Hot")} disabled={isSubmitting} className="bg-orange-500 p-4 rounded-xl font-bold flex gap-3 justify-center disabled:opacity-50">{isSubmitting ? "Saving..." : <><Flame/> Hot Lead</>}</button><button onClick={() => submitOutcome("Interested")} disabled={isSubmitting} className="bg-blue-600 p-4 rounded-xl font-bold flex gap-3 justify-center disabled:opacity-50">{isSubmitting ? "Saving..." : <><ThumbsUp/> Interested</>}</button><button onClick={() => submitOutcome("No Answer")} disabled={isSubmitting} className="bg-slate-700 p-4 rounded-xl font-bold flex gap-3 justify-center disabled:opacity-50">{isSubmitting ? "Saving..." : <><Snowflake/> No Answer / Cold</>}</button></div></div>
     );
     
     if(mode === "snooze") return (
         <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Snooze...</h2><div className="gap-4 grid w-full max-w-xs"><button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button><button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button><button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button></div><button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button></div>
     );
 
-    // Dynamic Button Style based on Action
     const getBtnColor = () => {
         if(actionType === 'email') return 'bg-purple-600';
         if(actionType === 'call') return 'bg-blue-600';
@@ -389,7 +446,7 @@ function CameraScan({ onBack, onScanComplete }) {
                 const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 const dataUrl = canvas.toDataURL("image/jpeg", 0.7); const base64 = dataUrl.split(",")[1];
                 
-                fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_ANALYZE_IMAGE", payload: { image: base64 } }) })
+                fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_ANALYZE_IMAGE", payload: { image: base64 } }) })
                 .then(r => r.json())
                 .then(json => { 
                     setLoading(false);
@@ -424,21 +481,21 @@ function BulkPasteForm({ onBack, onSubmit }) {
     const [text, setText] = useState(""); 
     const [parsed, setParsed] = useState([]); 
     const [loading, setLoading] = useState(false); 
-    const handleSmartScan = async () => { if(!text) return; setLoading(true); const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI is taking too long. Paste less text and try again."); } }, 15000); try { const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); const json = await res.json(); clearTimeout(timeoutId); if(json.status === "error") { alert("❌ AI Error: " + json.message); } else if(json.data) { setParsed(json.data); alert(`✅ AI Found ${json.data.length} Leads!`); } } catch(e) { clearTimeout(timeoutId); alert("AI Error: " + e.message); } setLoading(false); };
+    const handleSmartScan = async () => { if(!text) return; setLoading(true); const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI is taking too long. Paste less text and try again."); } }, 15000); try { const res = await fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); const json = await res.json(); clearTimeout(timeoutId); if(json.status === "error") { alert("❌ AI Error: " + json.message); } else if(json.data) { setParsed(json.data); alert(`✅ AI Found ${json.data.length} Leads!`); } } catch(e) { clearTimeout(timeoutId); alert("AI Error: " + e.message); } setLoading(false); };
     const handleSave = async () => { await onSubmit(parsed); }; 
     if(parsed.length > 0) return (<div className="h-screen bg-white flex flex-col p-4"><div className="flex justify-between mb-4 items-center"><h2 className="font-bold">Found {parsed.length}</h2><button onClick={handleSave} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow">Save All</button></div><div className="flex-1 overflow-y-auto space-y-2">{parsed.map((l, i) => (<div key={i} className="p-3 border rounded-xl bg-gray-50"><div className="font-bold">{l.name}</div><div className="text-xs text-gray-500">{l.phone} • {l.email}</div><div className="text-xs text-blue-600 italic">{l.context}</div></div>))}</div></div>);
     return (<div className="p-6 max-w-md mx-auto h-screen bg-white flex flex-col"><button onClick={onBack} className="text-gray-400 mb-4 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-black text-gray-800 mb-2">AI Smart Scan 🧠</h1><p className="text-sm text-gray-500 mb-4">Paste messy text.</p><textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. Rahul 988822222 from Acme Corp..." className="flex-1 w-full p-4 bg-gray-50 rounded-xl border outline-none font-mono text-sm mb-4"/><button onClick={handleSmartScan} disabled={!text || loading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2">{loading ? "AI is Thinking..." : "Extract Leads"}</button></div>); 
 }
 
-function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
+function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
 
-function DigitalCard({ profileId }) { const [profile, setProfile] = useState(null); const [loading, setLoading] = useState(true); useEffect(() => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: profileId } }) }).then(res => res.json()).then(json => { if(json.status === 'success') setProfile(json.data); setLoading(false); }); }, [profileId]); const saveContact = () => { const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${profile.name}\nTEL;TYPE=CELL:${profile.phone}\nEND:VCARD`; const blob = new Blob([vcard], { type: "text/vcard" }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${profile.name}.vcf`; a.click(); }; if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>; if (!profile) return <div className="h-screen flex items-center justify-center text-gray-500">Profile Not Found</div>; return (<div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans"><div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in"><div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative"><div className="absolute -bottom-12 left-0 right-0 flex justify-center"><div className="w-24 h-24 bg-white rounded-full p-1 shadow-lg overflow-hidden">{profile.photo ? <img src={profile.photo} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl">{profile.name.charAt(0)}</div>}</div></div></div><div className="pt-16 pb-8 px-8 text-center"><h1 className="text-2xl font-black text-gray-900">{profile.name}</h1><p className="text-blue-600 font-bold text-xs uppercase tracking-wide mb-1">{profile.title || "Sales Professional"}</p><p className="text-gray-500 font-medium mb-6">+{profile.phone}</p><div className="space-y-3"><button onClick={saveContact} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-black active:scale-95 transition-transform"><UserCheck size={20} /> Save Contact</button><div className="grid grid-cols-2 gap-3"><button onClick={() => window.open(`https://wa.me/${profile.phone}`, '_blank')} className="py-4 bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><Zap size={20} /> WhatsApp</button><button onClick={() => window.open(`tel:${profile.phone}`, '_self')} className="py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Phone size={20} /> Call</button></div>{profile.website && (<button onClick={() => window.open(profile.website, '_blank')} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"><LinkIcon size={18} /> Visit Website</button>)}</div></div><div className="bg-gray-50 p-4 text-center border-t border-gray-100 cursor-pointer" onClick={() => window.open(window.location.origin, '_blank')}><p className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Zap size={12} className="text-orange-500"/> Powered by Thrivoy</p></div></div></div>); }
+function DigitalCard({ profileId }) { const [profile, setProfile] = useState(null); const [loading, setLoading] = useState(true); useEffect(() => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: profileId } }) }).then(res => res.json()).then(json => { if(json.status === 'success') setProfile(json.data); setLoading(false); }); }, [profileId]); const saveContact = () => { const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${profile.name}\nTEL;TYPE=CELL:${profile.phone}\nEND:VCARD`; const blob = new Blob([vcard], { type: "text/vcard" }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${profile.name}.vcf`; a.click(); }; if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>; if (!profile) return <div className="h-screen flex items-center justify-center text-gray-500">Profile Not Found</div>; return (<div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans"><div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in"><div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative"><div className="absolute -bottom-12 left-0 right-0 flex justify-center"><div className="w-24 h-24 bg-white rounded-full p-1 shadow-lg overflow-hidden">{profile.photo ? <img src={profile.photo} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl">{profile.name.charAt(0)}</div>}</div></div></div><div className="pt-16 pb-8 px-8 text-center"><h1 className="text-2xl font-black text-gray-900">{profile.name}</h1><p className="text-blue-600 font-bold text-xs uppercase tracking-wide mb-1">{profile.title || "Sales Professional"}</p><p className="text-gray-500 font-medium mb-6">+{profile.phone}</p><div className="space-y-3"><button onClick={saveContact} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-black active:scale-95 transition-transform"><UserCheck size={20} /> Save Contact</button><div className="grid grid-cols-2 gap-3"><button onClick={() => window.open(`https://wa.me/${profile.phone}`, '_blank')} className="py-4 bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><Zap size={20} /> WhatsApp</button><button onClick={() => window.open(`tel:${profile.phone}`, '_self')} className="py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Phone size={20} /> Call</button></div>{profile.website && (<button onClick={() => window.open(profile.website, '_blank')} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"><LinkIcon size={18} /> Visit Website</button>)}</div></div><div className="bg-gray-50 p-4 text-center border-t border-gray-100 cursor-pointer" onClick={() => window.open(window.location.origin, '_blank')}><p className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Zap size={12} className="text-orange-500"/> Powered by Thrivoy</p></div></div></div>); }
 
-function HotList({ clientId, onBack }) { const [leads, setLeads] = useState([]); const [loading, setLoading] = useState(true); useEffect(() => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_HOTLIST", payload: { client_id: clientId } }) }).then(res => res.json()).then(json => { setLeads(json.data || []); setLoading(false); }); }, []); const requeue = (id) => { setLeads(leads.filter(l => l.lead_id !== id)); fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "REQUEUE_LEAD", payload: { lead_id: id } }) }); alert("Lead moved back to Stack!"); }; return (<div className="p-4 max-w-md mx-auto h-screen bg-white flex flex-col"><div className="flex items-center justify-between mb-6"><button onClick={onBack} className="text-gray-400 flex items-center gap-1"><ArrowLeft size={16}/> Back</button><span className="font-bold text-orange-600 flex items-center gap-2"><Flame size={18} fill="currentColor"/> Vault</span></div>{loading ? <div className="text-center p-8 text-gray-400">Loading...</div> : (<div className="flex-1 overflow-y-auto space-y-3">{leads.length === 0 ? <div className="text-center p-8 text-gray-400">No Hot Leads.</div> : leads.map(l => (<div key={l.lead_id} className="p-4 rounded-xl border border-orange-100 bg-orange-50"><div className="flex justify-between"><div><h3 className="font-bold">{l.name}</h3><p className="text-xs">{l.phone}</p></div><span className="bg-orange-200 text-orange-800 text-[10px] px-2 rounded-full uppercase">{l.outcome}</span></div><button onClick={() => requeue(l.lead_id)} className="w-full mt-2 bg-orange-600 text-white py-2 rounded text-xs font-bold">Follow Up</button></div>))}</div>)}</div>); }
+function HotList({ clientId, onBack }) { const [leads, setLeads] = useState([]); const [loading, setLoading] = useState(true); useEffect(() => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_HOTLIST", payload: { client_id: clientId } }) }).then(res => res.json()).then(json => { setLeads(json.data || []); setLoading(false); }); }, []); const requeue = (id) => { setLeads(leads.filter(l => l.lead_id !== id)); fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "REQUEUE_LEAD", payload: { lead_id: id } }) }); alert("Lead moved back to Stack!"); }; return (<div className="p-4 max-w-md mx-auto h-screen bg-white flex flex-col"><div className="flex items-center justify-between mb-6"><button onClick={onBack} className="text-gray-400 flex items-center gap-1"><ArrowLeft size={16}/> Back</button><span className="font-bold text-orange-600 flex items-center gap-2"><Flame size={18} fill="currentColor"/> Vault</span></div>{loading ? <div className="text-center p-8 text-gray-400">Loading...</div> : (<div className="flex-1 overflow-y-auto space-y-3">{leads.length === 0 ? <div className="text-center p-8 text-gray-400">No Hot Leads.</div> : leads.map(l => (<div key={l.lead_id} className="p-4 rounded-xl border border-orange-100 bg-orange-50"><div className="flex justify-between"><div><h3 className="font-bold">{l.name}</h3><p className="text-xs">{l.phone}</p></div><span className="bg-orange-200 text-orange-800 text-[10px] px-2 rounded-full uppercase">{l.outcome}</span></div><button onClick={() => requeue(l.lead_id)} className="w-full mt-2 bg-orange-600 text-white py-2 rounded text-xs font-bold">Follow Up</button></div>))}</div>)}</div>); }
 
-function AdminDashboard() { const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [result, setResult] = useState(null); const [loading, setLoading] = useState(false); const createClient = async () => { if(!name || !phone) return alert("Enter Name and Phone"); setLoading(true); const cleanPhone = "91" + phone.replace(/\D/g,'').slice(-10); try { const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_CLIENT", payload: { name, phone: cleanPhone } }) }); const json = await res.json(); setResult({ ...json.data, phone: cleanPhone }); setName(""); setPhone(""); } catch(e) { alert("Error: " + e.message); } setLoading(false); }; const whatsAppLink = result ? `https://wa.me/${result.phone}?text=${encodeURIComponent(`Welcome to Thrivoy! 🚀\n\nHere is your access link:\n${result.magic_link}`)}` : "#"; return (<div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col items-center justify-center"><div className="w-full max-w-md"><h1 className="text-3xl font-black mb-8 text-center text-orange-500">👑 Admin Console</h1>{!result ? (<div className="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 space-y-6"><h2 className="text-xl font-bold text-slate-300">New User Setup</h2><input value={name} onChange={e=>setName(e.target.value)} className="w-full bg-slate-900 p-4 rounded-xl text-white outline-none border border-slate-700" placeholder="e.g. Rahul Sharma" /><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full bg-slate-900 p-4 rounded-xl text-white outline-none border border-slate-700" placeholder="e.g. 9876543210" /><button onClick={createClient} disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg">{loading ? "Generating..." : "Create Account 🚀"}</button></div>) : (<div className="bg-green-900/20 p-8 rounded-2xl text-center space-y-6 border border-green-500/50 shadow-2xl"><div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg"><CheckSquare size={32} className="text-white" /></div><h2 className="text-2xl font-bold text-green-400">Account Created!</h2><div className="bg-black/50 p-4 rounded-xl text-left"><p className="text-xs text-green-500 font-bold uppercase mb-1">Magic Link</p><div className="text-xs font-mono text-gray-300 break-all">{result.magic_link}</div></div><a href={whatsAppLink} target="_blank" rel="noopener noreferrer" className="block w-full bg-green-500 hover:bg-green-400 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-decoration-none"><Zap size={24} fill="currentColor" /> Send via WhatsApp</a><button onClick={() => setResult(null)} className="text-slate-400 text-sm font-bold underline">Create Another User</button></div>)}</div></div>); }
+function AdminDashboard() { const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [result, setResult] = useState(null); const [loading, setLoading] = useState(false); const createClient = async () => { if(!name || !phone) return alert("Enter Name and Phone"); setLoading(true); const cleanPhone = "91" + phone.replace(/\D/g,'').slice(-10); try { const res = await fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "ADD_CLIENT", payload: { name, phone: cleanPhone } }) }); const json = await res.json(); setResult({ ...json.data, phone: cleanPhone }); setName(""); setPhone(""); } catch(e) { alert("Error: " + e.message); } setLoading(false); }; const whatsAppLink = result ? `https://wa.me/${result.phone}?text=${encodeURIComponent(`Welcome to Thrivoy! 🚀\n\nHere is your access link:\n${result.magic_link}`)}` : "#"; return (<div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col items-center justify-center"><div className="w-full max-w-md"><h1 className="text-3xl font-black mb-8 text-center text-orange-500">👑 Admin Console</h1>{!result ? (<div className="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 space-y-6"><h2 className="text-xl font-bold text-slate-300">New User Setup</h2><input value={name} onChange={e=>setName(e.target.value)} className="w-full bg-slate-900 p-4 rounded-xl text-white outline-none border border-slate-700" placeholder="e.g. Rahul Sharma" /><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full bg-slate-900 p-4 rounded-xl text-white outline-none border border-slate-700" placeholder="e.g. 9876543210" /><button onClick={createClient} disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg">{loading ? "Generating..." : "Create Account 🚀"}</button></div>) : (<div className="bg-green-900/20 p-8 rounded-2xl text-center space-y-6 border border-green-500/50 shadow-2xl"><div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg"><CheckSquare size={32} className="text-white" /></div><h2 className="text-2xl font-bold text-green-400">Account Created!</h2><div className="bg-black/50 p-4 rounded-xl text-left"><p className="text-xs text-green-500 font-bold uppercase mb-1">Magic Link</p><div className="text-xs font-mono text-gray-300 break-all">{result.magic_link}</div></div><a href={whatsAppLink} target="_blank" rel="noopener noreferrer" className="block w-full bg-green-500 hover:bg-green-400 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-decoration-none"><Zap size={24} fill="currentColor" /> Send via WhatsApp</a><button onClick={() => setResult(null)} className="text-slate-400 text-sm font-bold underline">Create Another User</button></div>)}</div></div>); }
 
-function QueueList({ queue, setQueue, library, onBack, onLaunchStack }) { const [selected, setSelected] = useState([]); const [bulkContext, setBulkContext] = useState(""); const toggleSelect = (id) => { if (selected.includes(id)) setSelected(selected.filter(i => i !== id)); else setSelected([...selected, id]); }; const toggleAll = () => { if (selected.length === queue.length) setSelected([]); else setSelected(queue.map(q => q.lead_id)); }; const deleteSelected = async () => { if(!confirm(`Archive ${selected.length} leads?`)) return; const newQueue = queue.filter(q => !selected.includes(q.lead_id)); setQueue(newQueue); selected.forEach(id => fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: id, outcome: "Archived" } }) })); setSelected([]); }; const launchCampaign = () => { if(selected.length === 0) return alert("Select at least one!"); const campaignQueue = queue.filter(q => selected.includes(q.lead_id)).map(q => ({ ...q, context: bulkContext || q.context })); setQueue(campaignQueue); onLaunchStack(); }; return (<div className="p-4 max-w-md mx-auto h-screen bg-white flex flex-col"><div className="flex items-center justify-between mb-4"><button onClick={onBack} className="text-gray-400 flex items-center gap-1"><ArrowLeft size={16}/> Back</button><span className="font-bold text-gray-800">{selected.length} Selected</span></div><div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3 border border-blue-100"><div className="flex gap-2 items-center"><input value={bulkContext} onChange={e => setBulkContext(e.target.value)} placeholder="Context (e.g. Offer)" className="flex-1 p-2 text-sm rounded border outline-none font-bold text-blue-900"/><button onClick={()=>alert("Use context to update many leads at once.")} className="p-2 bg-white rounded border text-blue-600"><Wand2 size={18}/></button></div><div className="flex gap-2"><button onClick={toggleAll} className="flex-1 bg-white border border-blue-200 text-blue-600 py-2 rounded-lg text-xs font-bold">{selected.length === queue.length ? "Deselect All" : "Select All"}</button>{selected.length > 0 && (<button onClick={deleteSelected} className="px-4 bg-red-50 text-red-600 rounded-lg text-xs font-bold flex items-center gap-2 border border-red-100"><UserMinus size={16} /> Archive</button>)}</div><button onClick={launchCampaign} disabled={selected.length === 0} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"><Play size={18} fill="currentColor" /> Start Campaign</button></div><div className="flex-1 overflow-y-auto space-y-2">{queue.map(lead => (<div key={lead.lead_id} onClick={() => toggleSelect(lead.lead_id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${selected.includes(lead.lead_id) ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-100'}`}><div className={`text-blue-500 ${selected.includes(lead.lead_id) ? 'opacity-100' : 'opacity-20'}`}>{selected.includes(lead.lead_id) ? <CheckSquare size={20} /> : <Square size={20} />}</div><div><h3 className="font-bold text-gray-800 text-sm">{lead.name}</h3><p className="text-xs text-gray-500">+{lead.phone} {lead.email && "• 📧"}</p></div></div>))}</div></div>); }
+function QueueList({ queue, setQueue, library, onBack, onLaunchStack }) { const [selected, setSelected] = useState([]); const [bulkContext, setBulkContext] = useState(""); const toggleSelect = (id) => { if (selected.includes(id)) setSelected(selected.filter(i => i !== id)); else setSelected([...selected, id]); }; const toggleAll = () => { if (selected.length === queue.length) setSelected([]); else setSelected(queue.map(q => q.lead_id)); }; const deleteSelected = async () => { if(!confirm(`Archive ${selected.length} leads?`)) return; const newQueue = queue.filter(q => !selected.includes(q.lead_id)); setQueue(newQueue); selected.forEach(id => fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "MARK_SENT", payload: { lead_id: id, outcome: "Archived" } }) })); setSelected([]); }; const launchCampaign = () => { if(selected.length === 0) return alert("Select at least one!"); const campaignQueue = queue.filter(q => selected.includes(q.lead_id)).map(q => ({ ...q, context: bulkContext || q.context })); setQueue(campaignQueue); onLaunchStack(); }; return (<div className="p-4 max-w-md mx-auto h-screen bg-white flex flex-col"><div className="flex items-center justify-between mb-4"><button onClick={onBack} className="text-gray-400 flex items-center gap-1"><ArrowLeft size={16}/> Back</button><span className="font-bold text-gray-800">{selected.length} Selected</span></div><div className="bg-blue-50 p-4 rounded-xl mb-4 space-y-3 border border-blue-100"><div className="flex gap-2 items-center"><input value={bulkContext} onChange={e => setBulkContext(e.target.value)} placeholder="Context (e.g. Offer)" className="flex-1 p-2 text-sm rounded border outline-none font-bold text-blue-900"/><button onClick={()=>alert("Use context to update many leads at once.")} className="p-2 bg-white rounded border text-blue-600"><Wand2 size={18}/></button></div><div className="flex gap-2"><button onClick={toggleAll} className="flex-1 bg-white border border-blue-200 text-blue-600 py-2 rounded-lg text-xs font-bold">{selected.length === queue.length ? "Deselect All" : "Select All"}</button>{selected.length > 0 && (<button onClick={deleteSelected} className="px-4 bg-red-50 text-red-600 rounded-lg text-xs font-bold flex items-center gap-2 border border-red-100"><UserMinus size={16} /> Archive</button>)}</div><button onClick={launchCampaign} disabled={selected.length === 0} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"><Play size={18} fill="currentColor" /> Start Campaign</button></div><div className="flex-1 overflow-y-auto space-y-2">{queue.map(lead => (<div key={lead.lead_id} onClick={() => toggleSelect(lead.lead_id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${selected.includes(lead.lead_id) ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-100'}`}><div className={`text-blue-500 ${selected.includes(lead.lead_id) ? 'opacity-100' : 'opacity-20'}`}>{selected.includes(lead.lead_id) ? <CheckSquare size={20} /> : <Square size={20} />}</div><div><h3 className="font-bold text-gray-800 text-sm">{lead.name}</h3><p className="text-xs text-gray-500">+{lead.phone} {lead.email && "• 📧"}</p></div></div>))}</div></div>); }
 
 function HelpScreen({ onBack }) { return (<div className="p-6 max-w-md mx-auto h-screen bg-white flex flex-col overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-4 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-3xl font-black text-gray-800 mb-6">User Guide</h1><div className="space-y-6"><p><strong>1. Scan:</strong> Use 'Paste Page' or 'Camera' to import data.</p><p><strong>2. Stack:</strong> Use the Toggle (⚡/📞) to switch between WhatsApp and Calling mode.</p><p><strong>3. Vault:</strong> Leads tagged as 'Hot' appear in the 'My Hot Leads' section.</p><p><strong>4. Digital Card:</strong> Click the share icon on the menu to send your link.</p><p><strong>5. AI:</strong> Use the Wand to rewrite text or the Camera to scan cards.</p></div></div>); }
 
@@ -491,4 +548,8 @@ function FAQItem({ q, a }) {
     );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
