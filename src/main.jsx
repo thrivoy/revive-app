@@ -12,14 +12,14 @@ import {
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, Briefcase, WifiOff, Save
 } from 'lucide-react';
 
-// ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
+// ⚠️ PASTE YOUR DEPLOYED GOOGLE SCRIPT URL HERE
 const API_URL = "https://script.google.com/macros/s/AKfycbwWoueuAHRC_4ENzPyP_8F69GSsR6HunVpEtxWnxf-EuIOS8iOHMgHPszNFZHNxk9uWvA/exec";
 
 const ADMIN_KEY = "master";
 
 const ANNOUNCEMENT = {
-    title: "Review Mode Added 📝",
-    text: "You can now edit or delete AI leads before saving them.",
+    title: "System Ready 🟢",
+    text: "AI upgraded. Review Mode active. Duplicate protection on.",
     type: "info" 
 };
 
@@ -177,7 +177,7 @@ function App() {
   if(view === "list") return <QueueList queue={queue} setQueue={setQueue} library={library} onBack={() => setView("menu")} onLaunchStack={() => setView("stack")} />;
   if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} prefill={prefillData} />;
   
-  // 🆕 V19.2: REPLACES THE OLD BULK PASTE FORM WITH REVIEW MODE
+  // 🆕 V19.3: REVIEW MODE WITH VALIDATION
   if(view === "bulk") return <BulkPasteForm onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />;
   
   if(view === "help") return <HelpScreen onBack={() => setView("menu")} />;
@@ -345,7 +345,7 @@ function CameraScan({ onBack, onScanComplete }) {
 }
 
 // =========================================================
-// 🆕 19.2 UPGRADED COMPONENT: BULK PASTE REVIEWER
+// 🆕 19.3 UPGRADED COMPONENT: REVIEW MODE + VALIDATION
 // =========================================================
 function BulkPasteForm({ onBack, onSubmit }) { 
     const [text, setText] = useState(""); 
@@ -369,27 +369,34 @@ function BulkPasteForm({ onBack, onSubmit }) {
                 setParsed(json.data); 
             } 
         } catch(e) { 
-            clearTimeout(timeoutId);
+            clearTimeout(timeoutId); 
             alert("Network Error"); 
         } 
         setLoading(false); 
     };
 
-    // Update specific field in a specific lead
+    // Update specific field
     const updateField = (index, field, value) => {
         const newParsed = [...parsed];
         newParsed[index][field] = value;
         setParsed(newParsed);
     };
 
-    // Remove a bad lead
+    // Remove lead
     const removeLead = (index) => {
         const newParsed = parsed.filter((_, i) => i !== index);
         setParsed(newParsed);
     };
 
-    // Final Submit
-    const handleSave = async () => { await onSubmit(parsed); }; 
+    // 🛡️ VALIDATION BEFORE SUBMIT (V19.3 Addition)
+    const handleSave = async () => { 
+        const invalid = parsed.filter(l => l.phone.replace(/\D/g,'').length < 10);
+        if(invalid.length > 0) {
+            alert(`⚠️ ${invalid.length} leads have invalid phone numbers (too short). Please fix or delete them.`);
+            return;
+        }
+        await onSubmit(parsed); 
+    }; 
     
     // --- RENDER: REVIEW MODE ---
     if(parsed.length > 0) return (
@@ -421,7 +428,7 @@ function BulkPasteForm({ onBack, onSubmit }) {
                                 <input 
                                     value={l.phone.replace(/^91/, '')} 
                                     onChange={(e) => updateField(i, 'phone', '91' + e.target.value.replace(/\D/g,''))}
-                                    className="w-full text-sm text-gray-600 outline-none border-b border-transparent focus:border-blue-500 font-mono"
+                                    className={`w-full text-sm outline-none border-b border-transparent focus:border-blue-500 font-mono ${l.phone.replace(/\D/g,'').length < 10 ? 'text-red-500' : 'text-gray-600'}`}
                                     placeholder="Phone"
                                 />
                             </div>
@@ -469,7 +476,7 @@ function BulkPasteForm({ onBack, onSubmit }) {
     ); 
 }
 
-function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
+function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title (e.g. Senior Agent)" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL (LinkedIn/WhatsApp Link)" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
 
 function DigitalCard({ profileId }) { const [profile, setProfile] = useState(null); const [loading, setLoading] = useState(true); useEffect(() => { fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: profileId } }) }).then(res => res.json()).then(json => { if(json.status === 'success') setProfile(json.data); setLoading(false); }); }, [profileId]); const saveContact = () => { const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${profile.name}\nTEL;TYPE=CELL:${profile.phone}\nEND:VCARD`; const blob = new Blob([vcard], { type: "text/vcard" }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${profile.name}.vcf`; a.click(); }; if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>; if (!profile) return <div className="h-screen flex items-center justify-center text-gray-500">Profile Not Found</div>; return (<div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans"><div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in"><div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative"><div className="absolute -bottom-12 left-0 right-0 flex justify-center"><div className="w-24 h-24 bg-white rounded-full p-1 shadow-lg overflow-hidden">{profile.photo ? <img src={profile.photo} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl">{profile.name.charAt(0)}</div>}</div></div></div><div className="pt-16 pb-8 px-8 text-center"><h1 className="text-2xl font-black text-gray-900">{profile.name}</h1><p className="text-blue-600 font-bold text-xs uppercase tracking-wide mb-1">{profile.title || "Sales Professional"}</p><p className="text-gray-500 font-medium mb-6">+{profile.phone}</p><div className="space-y-3"><button onClick={saveContact} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-black active:scale-95 transition-transform"><UserCheck size={20} /> Save Contact</button><div className="grid grid-cols-2 gap-3"><button onClick={() => window.open(`https://wa.me/${profile.phone}`, '_blank')} className="py-4 bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><Zap size={20} /> WhatsApp</button><button onClick={() => window.open(`tel:${profile.phone}`, '_self')} className="py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Phone size={20} /> Call</button></div>{profile.website && (<button onClick={() => window.open(profile.website, '_blank')} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"><LinkIcon size={18} /> Visit Website</button>)}</div></div><div className="bg-gray-50 p-4 text-center border-t border-gray-100 cursor-pointer" onClick={() => window.open(window.location.origin, '_blank')}><p className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Zap size={12} className="text-orange-500"/> Powered by Thrivoy</p></div></div></div>); }
 
@@ -499,6 +506,7 @@ function UseCaseCard({ icon, title, text }) {
             <div className="text-orange-600 mb-4">{icon}</div>
             <h3 className="font-bold text-lg mb-2">{title}</h3>
             <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
+            <p className="text-xs text-gray-400 mt-2 font-mono">Input: Messy text → Output: Clean leads</p>
         </div>
     ); 
 }
