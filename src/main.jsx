@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 // ⚠️ PASTE YOUR NEW GOOGLE SCRIPT DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbzF_JmgJXcgCzrIt9wowtl1PnGFOh8bz3CiVqiCuU8l9IrJl7EtLu7-gCW6R-TygUgE6g/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwFyhVyyCyYPPfw2qkma7DQFugxQjai93QFFYMqDN133Hk1DDPT9mLk1Zd88cqQro0ouQ/exec";
 
 const ADMIN_KEY = "master";
 
@@ -127,7 +127,6 @@ function App() {
   if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => setView("menu")} userProfile={userProfile} clientId={clientId} />;
   if(view === "list") return <QueueList queue={queue} setQueue={setQueue} library={library} onBack={() => setView("menu")} onLaunchStack={() => setView("stack")} />;
   
-  // Manual Form handles both "Add One" and "Verify Scan"
   if(view === "manual") return <ManualForm onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} status={status} prefill={prefillData} />;
   
   if(view === "bulk") return <BulkPasteForm onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />;
@@ -154,6 +153,7 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
 }
 
 function CardStack({ queue, setQueue, template, library, onBack }) { 
+    // 🛡️ HOOKS ALWAYS RUN FIRST
     const [mode, setMode] = useState("card"); 
     const [actionType, setActionType] = useState("whatsapp");
     const [file, setFile] = useState(null); 
@@ -161,6 +161,7 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const [currentMessage, setCurrentMessage] = useState("");
     const controls = useAnimation(); 
     
+    // Derived state
     const active = queue.length > 0 ? queue[0] : null;
 
     useEffect(() => {
@@ -168,7 +169,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
             controls.set({ x: 0, y: 0, opacity: 1 });
             
             // 🧠 SPLIT BRAIN LOGIC
-            // Context comes as: "Intent ||| Identity"
             const parts = (active.context || "").split(" ||| ");
             const intent = parts[0] || ""; // For the message
             
@@ -206,7 +206,17 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
     const handlePrimaryAction = async () => {
         if (actionType === 'call') { 
             window.open(`tel:${active.phone}`, '_self'); setMode("disposition"); 
-        } else {
+        } 
+        // 📧 NEW: EMAIL HANDLING
+        else if (actionType === 'email') {
+            if(active.email) {
+                window.open(`mailto:${active.email}?subject=${encodeURIComponent(intent)}`, '_blank');
+                setMode("disposition");
+            } else {
+                alert("No email address found for this lead.");
+            }
+        }
+        else {
             if (file && navigator.share) { 
                 try { await navigator.share({ files: [file], title: 'Message', text: currentMessage }); setMode("disposition"); } catch (err) { console.log(err); } 
             } else { 
@@ -232,10 +242,21 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
         <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Snooze...</h2><div className="gap-4 grid w-full max-w-xs"><button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button><button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button><button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button></div><button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button></div>
     );
 
+    // Dynamic Button Style based on Action
+    const getBtnColor = () => {
+        if(actionType === 'email') return 'bg-purple-600';
+        if(actionType === 'call') return 'bg-blue-600';
+        return 'bg-green-500';
+    };
+
     return (
         <div className="h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative overflow-hidden">
             <button onClick={onBack} className="absolute top-6 left-6 p-2 bg-gray-100 rounded-full text-gray-600 z-10"><ArrowLeft size={20}/></button>
-            <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex"><button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button><button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button></div>
+            <div className="absolute top-6 right-6 z-10 bg-gray-100 p-1 rounded-lg flex gap-1">
+                <button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button>
+                <button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button>
+                <button onClick={() => setActionType('email')} className={`p-2 rounded-md ${actionType === 'email' ? 'bg-white shadow text-purple-600' : 'text-gray-400'}`}><Mail size={20}/></button>
+            </div>
             <motion.div 
                 animate={controls} 
                 className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8 mx-auto"
@@ -244,7 +265,6 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
                 <div className="space-y-4 flex-1 flex flex-col min-h-0 relative">
                    {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
                    
-                   {/* IDENTITY BADGE: Shows Company/Title clearly at top */}
                    {identity && (
                        <div className="bg-purple-50 text-purple-900 px-3 py-1 rounded-full text-xs font-bold inline-block self-start border border-purple-100 flex items-center gap-2">
                            <Briefcase size={12}/> {identity}
@@ -252,18 +272,30 @@ function CardStack({ queue, setQueue, template, library, onBack }) {
                    )}
 
                    <div className="relative shrink-0"><input value={intent} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value + (identity ? " ||| " + identity : ""); setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
-                   <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone}</div></div>
-                   {actionType === 'whatsapp' ? (<textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none h-32" />) : (<div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 flex-1 flex items-center justify-center font-bold border border-blue-100">📞 Power Dialer Mode Active</div>)}
-                   {actionType === 'whatsapp' && (<label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label>)}
+                   <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone} {active.email && "• 📧"}</div></div>
+                   
+                   {actionType === 'whatsapp' ? (
+                       <>
+                       <textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none h-32" />
+                       <label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label>
+                       </>
+                   ) : (
+                       <div className={`bg-gray-50 p-3 rounded-lg text-xs text-gray-800 flex-1 flex flex-col items-center justify-center font-bold border border-gray-100`}>
+                           {actionType === 'call' ? <Phone size={48} className="text-blue-200 mb-2"/> : <Mail size={48} className="text-purple-200 mb-2"/>}
+                           {actionType === 'call' ? "Power Dialer Mode Active" : "Email Mode Active"}
+                           {actionType === 'email' && <div className="text-[10px] text-gray-400 font-normal mt-2">{active.email || "No Email Found"}</div>}
+                       </div>
+                   )}
                 </div>
-                <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${actionType === 'call' ? 'bg-blue-600' : 'bg-green-500'}`}>{actionType === 'call' ? <><Phone size={24}/> DIAL</> : <><Zap size={24}/> WhatsApp</>}</button><div className="flex gap-2"><button onClick={() => controls.start({ x: -500 }).then(() => {setQueue(q => q.slice(1)); setMode("card");})} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
+                <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${getBtnColor()}`}>
+                    {actionType === 'call' ? <><Phone size={24}/> DIAL</> : actionType === 'email' ? <><Mail size={24}/> SEND MAIL</> : <><Zap size={24}/> WhatsApp</>}
+                </button><div className="flex gap-2"><button onClick={() => controls.start({ x: -500 }).then(() => {setQueue(q => q.slice(1)); setMode("card");})} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
             </motion.div>
         </div>
     ); 
 }
 
 function ManualForm({ onBack, onSubmit, status, prefill }) { 
-    // 🛡️ SAFE INITIALIZATION: Guarantee non-null values
     const [name, setName] = useState(prefill ? (prefill.name || "") : ""); 
     const [phone, setPhone] = useState(prefill ? (prefill.phone || "") : ""); 
     const [email, setEmail] = useState(prefill ? (prefill.email || "") : "");
@@ -321,7 +353,6 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
                 <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
                 <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
                 
-                {/* 📱 MOBILE FIX: Flex-col ensures inputs stack on small screens */}
                 <div className="flex flex-col gap-4">
                     <input value={company} onChange={e=>setCompany(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Company" />
                     <input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Website" />
@@ -393,38 +424,13 @@ function BulkPasteForm({ onBack, onSubmit }) {
     const [text, setText] = useState(""); 
     const [parsed, setParsed] = useState([]); 
     const [loading, setLoading] = useState(false); 
-    
-    const handleSmartScan = async () => { 
-        if(!text) return; 
-        setLoading(true); 
-        const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI is taking too long. Paste less text and try again."); } }, 15000);
-
-        try { 
-            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); 
-            const json = await res.json(); 
-            clearTimeout(timeoutId);
-            
-            if(json.status === "error") { 
-                alert("❌ AI Error: " + json.message); 
-            } else if(json.data) { 
-                setParsed(json.data); 
-                alert(`✅ AI Found ${json.data.length} Leads!`); 
-            } 
-        } catch(e) { 
-            clearTimeout(timeoutId);
-            alert("AI Error: " + e.message); 
-        } 
-        setLoading(false); 
-    };
-
+    const handleSmartScan = async () => { if(!text) return; setLoading(true); const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI is taking too long. Paste less text and try again."); } }, 15000); try { const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "AI_PARSE_TEXT", payload: { text } }) }); const json = await res.json(); clearTimeout(timeoutId); if(json.status === "error") { alert("❌ AI Error: " + json.message); } else if(json.data) { setParsed(json.data); alert(`✅ AI Found ${json.data.length} Leads!`); } } catch(e) { clearTimeout(timeoutId); alert("AI Error: " + e.message); } setLoading(false); };
     const handleSave = async () => { await onSubmit(parsed); }; 
-    
     if(parsed.length > 0) return (<div className="h-screen bg-white flex flex-col p-4"><div className="flex justify-between mb-4 items-center"><h2 className="font-bold">Found {parsed.length}</h2><button onClick={handleSave} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow">Save All</button></div><div className="flex-1 overflow-y-auto space-y-2">{parsed.map((l, i) => (<div key={i} className="p-3 border rounded-xl bg-gray-50"><div className="font-bold">{l.name}</div><div className="text-xs text-gray-500">{l.phone} • {l.email}</div><div className="text-xs text-blue-600 italic">{l.context}</div></div>))}</div></div>);
-    
     return (<div className="p-6 max-w-md mx-auto h-screen bg-white flex flex-col"><button onClick={onBack} className="text-gray-400 mb-4 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-black text-gray-800 mb-2">AI Smart Scan 🧠</h1><p className="text-sm text-gray-500 mb-4">Paste messy text.</p><textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. Rahul 988822222 from Acme Corp..." className="flex-1 w-full p-4 bg-gray-50 rounded-xl border outline-none font-mono text-sm mb-4"/><button onClick={handleSmartScan} disabled={!text || loading} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2">{loading ? "AI is Thinking..." : "Extract Leads"}</button></div>); 
 }
 
-function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title (e.g. Senior Agent)" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL (LinkedIn/WhatsApp Link)" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
+function SettingsForm({ currentTemplate, library, onSaveActive, onAddToLib, onRemoveFromLib, onBack, userProfile, clientId }) { const [temp, setTemp] = useState(currentTemplate); const [saveName, setSaveName] = useState(""); const [title, setTitle] = useState(userProfile?.title || ""); const [photo, setPhoto] = useState(userProfile?.photo || ""); const [website, setWebsite] = useState(userProfile?.website || ""); const saveProfile = () => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "UPDATE_PROFILE", payload: { client_id: clientId, title, photo, website } }) }); alert("Profile Updated!"); }; return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1><div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100"><h2 className="font-bold text-sm mb-4 flex items-center gap-2"><ShieldCheck size={16} className="text-blue-600"/> Pro Profile Identity</h2><div className="space-y-3"><input value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Job Title" /><input value={photo} onChange={e=>setPhoto(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Photo URL" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-2 text-sm border rounded" placeholder="Website Link" /><button onClick={saveProfile} className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs">Save Profile</button></div></div><h2 className="font-bold text-sm mb-2">Message Template</h2><textarea value={temp} onChange={e => setTemp(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl border outline-none mb-4" /><button onClick={() => onSaveActive(temp)} className="w-full bg-gray-800 text-white p-3 rounded-xl font-bold mb-8">Set Active</button><div className="flex gap-2 mb-4"><input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 rounded-lg border outline-none"/><button onClick={() => { if(saveName) { onAddToLib(saveName, temp); setSaveName(""); }}} className="bg-purple-600 text-white p-2 rounded-lg font-bold"><Plus size={20}/></button></div><div className="space-y-3 pb-24">{library.map(t => (<div key={t.id} className="p-3 border rounded-xl flex items-center justify-between"><div onClick={() => setTemp(t.text)} className="cursor-pointer flex-1"><div className="font-bold">{t.name}</div><div className="text-xs text-gray-400 truncate w-48">{t.text}</div></div><button onClick={() => onRemoveFromLib(t.id)} className="text-red-300"><X size={16}/></button></div>))}</div></div>); }
 
 function DigitalCard({ profileId }) { const [profile, setProfile] = useState(null); const [loading, setLoading] = useState(true); useEffect(() => { fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "GET_CLIENT_PROFILE", payload: { client_id: profileId } }) }).then(res => res.json()).then(json => { if(json.status === 'success') setProfile(json.data); setLoading(false); }); }, [profileId]); const saveContact = () => { const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${profile.name}\nTEL;TYPE=CELL:${profile.phone}\nEND:VCARD`; const blob = new Blob([vcard], { type: "text/vcard" }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${profile.name}.vcf`; a.click(); }; if (loading) return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>; if (!profile) return <div className="h-screen flex items-center justify-center text-gray-500">Profile Not Found</div>; return (<div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans"><div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in fade-in"><div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative"><div className="absolute -bottom-12 left-0 right-0 flex justify-center"><div className="w-24 h-24 bg-white rounded-full p-1 shadow-lg overflow-hidden">{profile.photo ? <img src={profile.photo} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-2xl">{profile.name.charAt(0)}</div>}</div></div></div><div className="pt-16 pb-8 px-8 text-center"><h1 className="text-2xl font-black text-gray-900">{profile.name}</h1><p className="text-blue-600 font-bold text-xs uppercase tracking-wide mb-1">{profile.title || "Sales Professional"}</p><p className="text-gray-500 font-medium mb-6">+{profile.phone}</p><div className="space-y-3"><button onClick={saveContact} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-black active:scale-95 transition-transform"><UserCheck size={20} /> Save Contact</button><div className="grid grid-cols-2 gap-3"><button onClick={() => window.open(`https://wa.me/${profile.phone}`, '_blank')} className="py-4 bg-green-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><Zap size={20} /> WhatsApp</button><button onClick={() => window.open(`tel:${profile.phone}`, '_self')} className="py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Phone size={20} /> Call</button></div>{profile.website && (<button onClick={() => window.open(profile.website, '_blank')} className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"><LinkIcon size={18} /> Visit Website</button>)}</div></div><div className="bg-gray-50 p-4 text-center border-t border-gray-100 cursor-pointer" onClick={() => window.open(window.location.origin, '_blank')}><p className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Zap size={12} className="text-orange-500"/> Powered by Thrivoy</p></div></div></div>); }
 
