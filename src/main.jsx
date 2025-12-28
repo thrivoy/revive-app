@@ -13,7 +13,7 @@ import {
   Briefcase, WifiOff, Save, LogOut, Search, Download, RefreshCcw, AlertTriangle
 } from 'lucide-react';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbw6t9WyDw9NazCcTTDNlBQ8tjyT-JloGwGvSBcVlsDIXnF25WSkyWthbY8sXhFF7JOO6Q/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxTz_KMdQ_QNtwpE4utBrJYR3MdDAnYITFUjxS2vwifZDsiFA3p0EP_u_sl6GiV72WMIQ/exec";
 
 const ADMIN_KEY = "master";
 const LEAD_LIMIT = 100;
