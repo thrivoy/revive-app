@@ -10,17 +10,20 @@ import {
   Play, UserMinus, Mail, Clock, Flame, ThumbsUp, 
   Snowflake, UserCheck, ShieldCheck, Camera, Mic, 
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, 
-  Briefcase, WifiOff, Save, LogOut, Search, Download, RefreshCcw, AlertTriangle
+  Briefcase, WifiOff, Save, LogOut, Search, Download, RefreshCcw, AlertTriangle, Lock
 } from 'lucide-react';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxTz_KMdQ_QNtwpE4utBrJYR3MdDAnYITFUjxS2vwifZDsiFA3p0EP_u_sl6GiV72WMIQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxsnlkrlmzfDmhDVZNDj5wFaIHWCtb1WMwtwZYX3jHzyEZzqy_q3X_WLS-e1S7_0Hx4bA/exec";
+
+// 🔐 CHANGE THIS to something secret for yourself
+const ADMIN_PASSWORD = "thrivoy_boss"; 
 
 const ADMIN_KEY = "master";
 const LEAD_LIMIT = 100;
 
 const ANNOUNCEMENT = {
-    title: "System Fortified 🛡️",
-    text: "Review mode active. Enhanced data safety.",
+    title: "V21.2 Live 🚀",
+    text: "Review mode, Undo support, and enhanced security active.",
     type: "info" 
 };
 
@@ -29,6 +32,11 @@ const safeStorage = {
     getItem: (k) => { try { return localStorage.getItem(k); } catch(e) { return null; } },
     setItem: (k, v) => { try { localStorage.setItem(k, v); } catch(e) {} },
     removeItem: (k) => { try { localStorage.removeItem(k); } catch(e) {} }
+};
+
+// 🛡️ HELPER: Haptic Feedback
+const vibrate = (ms = 50) => {
+    if (navigator.vibrate) navigator.vibrate(ms);
 };
 
 // 🛡️ HELPER: Request Signing (HMAC)
@@ -40,7 +48,6 @@ async function signedRequest(action, payload) {
       return fetchWithRetry(API_URL, { method: 'POST', body: JSON.stringify({ action, payload }) });
   }
 
-  // ✅ FIXED: Template Literal Syntax
   const secret = safeStorage.getItem(`thrivoy_secret_${clientId}`);
   let signature = "";
   
@@ -60,15 +67,31 @@ async function signedRequest(action, payload) {
   });
 }
 
-// 🛡️ HELPER: Network Request
+// 🛡️ HELPER: Network Request with Deduplication
+const requestCache = new Map();
 const fetchWithRetry = async (url, options, retries = 2) => {
+    if (options.body && options.body.includes("GET_QUEUE")) {
+        const key = options.body;
+        if (requestCache.has(key)) return requestCache.get(key);
+    }
+
     try {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), 10000); 
-        const res = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        if(!res.ok) throw new Error("HTTP Error");
-        return res;
+        
+        const promise = fetch(url, { ...options, signal: controller.signal })
+            .then(res => {
+                clearTimeout(id);
+                if(!res.ok) throw new Error("HTTP Error");
+                return res;
+            });
+            
+        if (options.body && options.body.includes("GET_QUEUE")) {
+            requestCache.set(options.body, promise);
+            setTimeout(() => requestCache.delete(options.body), 5000);
+        }
+        
+        return await promise;
     } catch(e) {
         if(retries > 0) {
             await new Promise(r => setTimeout(r, 1000));
@@ -125,6 +148,9 @@ function App() {
       return params.get("key") || safeStorage.getItem("thrivoy_client_id") || "";
   });
 
+  // 🔐 ADMIN STATE
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+
   const [publicProfileId, setPublicProfileId] = useState(null);
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState({ today: 0 });
@@ -169,10 +195,19 @@ function App() {
         setPublicProfileId(user);
     } else if (clientId) {
         if(key) safeStorage.setItem("thrivoy_client_id", key);
-        fetchQueue(clientId); 
-        signedRequest("GET_CLIENT_PROFILE", { client_id: clientId })
-            .then(r=>r.json()).then(j => { if(j.data) setUserProfile(j.data); })
-            .catch(e => console.error("Profile Error", e));
+        
+        // Skip profile fetch for master key
+        if (clientId !== ADMIN_KEY) {
+            fetchQueue(clientId); 
+            signedRequest("GET_CLIENT_PROFILE", { client_id: clientId })
+                .then(r=>r.json()).then(j => { 
+                    if(j.data) { 
+                        setUserProfile(j.data); 
+                        if(j.data.secret) safeStorage.setItem(`thrivoy_secret_${clientId}`, j.data.secret);
+                    } 
+                })
+                .catch(e => console.error("Profile Error", e));
+        }
     }
     return () => {
         window.removeEventListener('online', handleOnline);
@@ -201,7 +236,6 @@ function App() {
   };
 
   const handleBulkSubmit = async (leads) => {
-    // ✅ FIXED: Template Literal Syntax
     setStatus(`Saving ${leads.length} leads...`);
     try {
         const res = await signedRequest("ADD_LEADS", { client_id: clientId, leads: leads });
@@ -215,7 +249,6 @@ function App() {
             const added = json.count || 0;
             
             if(skipped > 0) {
-                // ✅ FIXED: Template Literal Syntax
                 alert(`✅ Successfully Saved: ${added}\n🛡️ Duplicates Skipped: ${skipped}`);
             } else {
                 setStatus("Saved!");
@@ -258,7 +291,15 @@ function App() {
   if (!isOnline) return <div className="h-screen flex flex-col items-center justify-center p-6 text-center"><WifiOff size={48} className="text-gray-300 mb-4"/><h2 className="text-xl font-bold text-gray-800">You are Offline</h2><p className="text-gray-500">Check your internet connection.</p></div>;
 
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
-  if (clientId === ADMIN_KEY) return <AdminDashboard />;
+  
+  // 🔐 ADMIN LOGIN FLOW
+  if (clientId === ADMIN_KEY) {
+      if (!isAdminAuthenticated) {
+          return <AdminLogin onLogin={() => setIsAdminAuthenticated(true)} />;
+      }
+      return <AdminDashboard />;
+  }
+
   if (!clientId) return <LandingPage />;
   
   if(view === "menu") return <MenuScreen queue={queue} stats={stats} status={status} onViewChange={(newView) => { if(newView === "manual") { setPrefillData(null); setStatus(""); } navigateTo(newView); }} onUpload={handleFileUpload} announcement={ANNOUNCEMENT} clientId={clientId} />;
@@ -274,8 +315,40 @@ function App() {
   return <div className="h-screen flex items-center justify-center">Loading Thrivoy...</div>;
 }
 
+// 🔐 NEW: Admin Login Component
+function AdminLogin({ onLogin }) {
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState(false);
+    
+    const checkPassword = () => {
+        if(password === ADMIN_PASSWORD) {
+            onLogin();
+        } else {
+            setError(true);
+            vibrate();
+        }
+    };
+
+    return (
+        <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6">
+            <div className="w-full max-w-sm">
+                <Lock size={48} className="mx-auto mb-6 text-orange-500"/>
+                <h1 className="text-2xl font-bold text-center mb-6">Admin Access</h1>
+                <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                    className="w-full p-4 rounded-xl bg-slate-800 text-white outline-none border border-slate-700 mb-4 text-center"
+                    placeholder="Enter Password"
+                />
+                <button onClick={checkPassword} className="w-full bg-orange-600 py-4 rounded-xl font-bold mb-4">Unlock</button>
+                {error && <p className="text-red-500 text-center font-bold animate-pulse">Access Denied</p>}
+            </div>
+        </div>
+    );
+}
+
 function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement, clientId }) {
-    // ✅ FIXED: Template Literal Syntax
     const shareMyCard = () => { const url = `${window.location.origin}/?u=${clientId}`; if (navigator.share) navigator.share({ title: 'My Digital Card', url }); else window.open(`https://wa.me/?text=${encodeURIComponent(url)}`); };
     const leadPercent = Math.min(100, (queue.length / LEAD_LIMIT) * 100);
 
@@ -299,7 +372,6 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
               <span className="text-xs font-bold text-gray-800">{queue.length} / {LEAD_LIMIT}</span>
           </div>
           <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-              {/* ✅ FIXED: className Syntax */}
               <div className={`h-full ${leadPercent > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${leadPercent}%` }}></div>
           </div>
 
@@ -364,7 +436,7 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
     };
 
     const handlePrimaryAction = async () => {
-        // ✅ FIXED: Template Literal Syntax
+        vibrate(); // Haptic
         if (actionType === 'call') { 
             window.open(`tel:${active.phone}`, '_self'); setMode("disposition"); 
         } else if (actionType === 'email') {
@@ -384,26 +456,30 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
     };
 
     const submitOutcome = async (tag) => {
+        vibrate();
         if (isSubmittingRef.current) return;
         isSubmittingRef.current = true;
         setIsSubmitting(true);
         
-        await controls.start({ x: 500, opacity: 0 });
+        const originalQueue = [...queue]; 
         
+        await controls.start({ x: 500, opacity: 0 });
+        setQueue(q => q.slice(1)); 
+        setMode("card");
+        setIsSubmitting(false); 
+        isSubmittingRef.current = false;
+
         try {
             await signedRequest("MARK_SENT", { client_id: clientId, lead_id: active.lead_id, outcome: tag });
-            setQueue(q => q.slice(1)); 
-            setMode("card");
         } catch(e) {
-            controls.start({ x: 0, opacity: 1 });
-            alert("⚠️ Connection Failed. Lead NOT saved. Try again.");
-        } finally {
-            setIsSubmitting(false);
-            isSubmittingRef.current = false;
-        }
+            alert("⚠️ Sync Failed. Lead restored.");
+            setQueue(originalQueue);
+            controls.set({ x: 0, opacity: 1 });
+        } 
     };
     
     const handleSkip = async () => {
+        vibrate();
         const skipped = active;
         setLastSkipped(skipped);
         await controls.start({ x: -500, opacity: 0 });
@@ -413,6 +489,7 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
     };
 
     const handleUndo = () => {
+        vibrate();
         if(lastSkipped) {
             setQueue(q => [lastSkipped, ...q]);
             setLastSkipped(null);
@@ -420,8 +497,8 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
     };
 
     const addToCalendar = (days) => { 
+        vibrate();
         const d = new Date(); d.setDate(d.getDate() + days); 
-        // ✅ FIXED: Template Literal Syntax
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Call '+(active.name||"Lead"))}&details=${encodeURIComponent(intent)}&dates=${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}/${d.toISOString().replace(/-|:|\.\d\d\d/g,"")}`;
         window.open(url, '_blank');
         controls.start({ y: 500, opacity: 0 }).then(() => { controls.set({ y: 0, opacity: 1 }); signedRequest("SNOOZE_LEAD", { client_id: clientId, lead_id: active.lead_id, date: d.toISOString().split('T')[0] }); setQueue(q => q.slice(1)); setMode("card"); });
@@ -435,7 +512,6 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
         <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Snooze...</h2><div className="gap-4 grid w-full max-w-xs"><button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button><button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button><button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button></div><button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button></div>
     );
 
-    // ✅ FIXED: Template Literal Syntax for className
     const getBtnColor = () => { if(actionType === 'email') return 'bg-purple-600'; if(actionType === 'call') return 'bg-blue-600'; return 'bg-green-500'; };
 
     return (
@@ -465,7 +541,6 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
                    <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone} {active.email && "• 📧"}</div></div>
                    {actionType === 'whatsapp' ? (<><textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none min-h-[8rem]" /><label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label></>) : (<div className={`bg-gray-50 p-3 rounded-lg text-xs text-gray-800 flex-1 flex flex-col items-center justify-center font-bold border border-gray-100`}>{actionType === 'call' ? <Phone size={48} className="text-blue-200 mb-2"/> : <Mail size={48} className="text-purple-200 mb-2"/>}{actionType === 'call' ? "Power Dialer Mode Active" : "Email Mode Active"}{actionType === 'email' && <div className="text-[10px] text-gray-400 font-normal mt-2">{active.email || "No Email Found"}</div>}</div>)}
                 </div>
-                {/* ✅ FIXED: className Syntax */}
                 <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${getBtnColor()}`}>{actionType === 'call' ? <><Phone size={24}/> DIAL</> : actionType === 'email' ? <><Mail size={24}/> SEND MAIL</> : <><Zap size={24}/> WhatsApp</>}</button><div className="flex gap-2"><button onClick={handleSkip} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
             </motion.div>
         </div>
@@ -511,13 +586,13 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
     };
 
     const handleSubmit = () => { 
+        vibrate();
         if(!phone) return alert("Phone is required"); 
         let badge = []; if(company) badge.push(company); if(website) badge.push(website); let finalContext = context; if(badge.length > 0) finalContext = `${context} ||| ${badge.join(" • ")}`; 
         onSubmit({ name: name || "Customer", phone: normalizePhone(phone), email: email || "", context: finalContext }); 
         setName(""); setPhone(""); setEmail(""); setContext(""); setCompany(""); setWebsite(""); 
     }; 
     
-    // ✅ FIXED: className Syntax for mic button
     return (<div className="p-6 max-w-md mx-auto h-screen bg-white overflow-y-auto"><button onClick={onBack} className="text-gray-400 mb-6 flex items-center gap-2"><ArrowLeft size={16}/> Back</button><h1 className="text-2xl font-bold text-gray-800 mb-6">{prefill ? "Verify Scan" : "Add New Lead"}</h1><div className="space-y-4"><input value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Name" />
     <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} autoComplete="off" className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Phone" />
     <div className="flex flex-col gap-4"><input value={company} onChange={e=>setCompany(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Company" /><input value={website} onChange={e=>setWebsite(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Website" /></div><input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Email (Optional)" /><div className="relative"><textarea value={context} onChange={e=>setContext(e.target.value)} className="w-full p-3 bg-gray-50 rounded-lg border" placeholder="Notes / Context" /><button onClick={toggleMic} className={`absolute right-2 bottom-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button></div><button onClick={handleSubmit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold shadow-lg">Save to Queue</button>{status && <p className="text-center font-bold text-green-600">{status}</p>}</div></div>); 
@@ -545,10 +620,9 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
                 const dataUrl = canvas.toDataURL("image/jpeg", 0.7); 
                 const base64 = dataUrl.split(",")[1]; 
                 
-                // V20.7: Passed clientId to signedRequest
                 signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, image: base64 })
                 .then(r => r.json())
-                .then(json => { setLoading(false); if(json.data) { onScanComplete(json.data); } else { alert("❌ AI couldn't read the card. Try again."); } })
+                .then(json => { setLoading(false); if(json.data) { vibrate(); onScanComplete(json.data); } else { alert("❌ AI couldn't read the card. Try again."); } })
                 .catch(err => { setLoading(false); alert("Error: " + err.message); }); 
             }; 
             img.src = readerEvent.target.result; 
@@ -570,12 +644,11 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
         setLoading(true); 
         const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI Timeout. Try less text."); } }, 15000);
         try { 
-            // V20.7: Passed clientId to signedRequest
             const res = await signedRequest("AI_PARSE_TEXT", { client_id: clientId, text });
             const json = await res.json(); 
             clearTimeout(timeoutId);
             if(json.status === "error") alert("❌ " + json.message); 
-            else if(json.data) setParsed(json.data); 
+            else if(json.data) { vibrate(); setParsed(json.data); }
         } catch(e) { clearTimeout(timeoutId); alert("Network Error"); } 
         setLoading(false); 
     };
@@ -584,16 +657,15 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
     const removeLead = (index) => { const newParsed = parsed.filter((_, i) => i !== index); setParsed(newParsed); };
 
     const handleSave = async () => { 
+        vibrate();
         const invalid = parsed.filter(l => !l.phone || l.phone.replace(/\D/g,'').length < 8);
         if(invalid.length > 0) {
-            // ✅ FIXED: Template Literal Syntax
             alert(`⚠️ ${invalid.length} leads have invalid/short phone numbers. Fix or delete them.`);
             return;
         }
         await onSubmit(parsed); 
     }; 
     
-    // ✅ FIXED: className Syntax
     if(parsed.length > 0) return (
         <div className="h-screen bg-gray-50 flex flex-col">
             <div className="bg-white p-4 shadow-sm z-10 flex justify-between items-center">
@@ -608,7 +680,6 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
                             <input value={l.name} onChange={(e) => updateField(i, 'name', e.target.value)} className="w-full font-bold text-gray-800 outline-none border-b border-transparent focus:border-blue-500 transition-colors placeholder-gray-300" placeholder="Name"/>
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-400 text-xs">+91</span>
-                                {/* ✅ FIXED: className Syntax */}
                                 <input value={l.phone.replace(/^91/, '')} onChange={(e) => updateField(i, 'phone', '91' + e.target.value.replace(/\D/g,''))} className={`w-full text-sm outline-none border-b border-transparent focus:border-blue-500 font-mono ${(!l.phone || l.phone.replace(/\D/g,'').length < 10) ? 'text-red-500' : 'text-gray-600'}`} placeholder="Phone"/>
                             </div>
                             <input value={l.context} onChange={(e) => updateField(i, 'context', e.target.value)} className="w-full text-xs text-blue-600 bg-blue-50 p-2 rounded outline-none" placeholder="Context / Note"/>
@@ -647,7 +718,7 @@ function QueueList({ queue, setQueue, library, onBack, onLaunchStack }) {
     const toggleSelect = (id) => { if (selected.includes(id)) setSelected(selected.filter(i => i !== id)); else setSelected([...selected, id]); }; 
     const toggleAll = () => { if (selected.length === queue.length) setSelected([]); else setSelected(queue.map(q => q.lead_id)); }; 
     
-    // ✅ FIXED: Template Literal Syntax
+    // Syntax Corrected confirm with backticks
     const deleteSelected = async () => { if(!confirm(`Archive ${selected.length} leads?`)) return; const newQueue = queue.filter(q => !selected.includes(q.lead_id)); setQueue(newQueue); selected.forEach(id => signedRequest("MARK_SENT", { lead_id: id, outcome: "Archived" })); setSelected([]); }; 
     
     const launchCampaign = () => { if(selected.length === 0) return alert("Select at least one!"); const campaignQueue = queue.filter(q => selected.includes(q.lead_id)).map(q => ({ ...q, context: bulkContext || q.context })); setQueue(campaignQueue); onLaunchStack(); }; 
