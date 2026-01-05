@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 // 👇 PASTE YOUR DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbzZP2th9vyttqNvNfs43hfNDeVGKQcaBRnc8FBJL-0KBjlqwpLPEhkVavdhvolGWGakyQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyxOQZmJmtFlUjStWXvbhvP5yGawbcw2FUYrMw1Rp0F3cg7-OMOfxw8xjjdXW_Qy4MfTw/exec";
 
 const ADMIN_PASSWORD = "thrivoy_boss"; 
 const ADMIN_KEY = "master";
