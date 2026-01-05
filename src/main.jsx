@@ -77,7 +77,7 @@ const fetchWithRetry = async (url, options, retries = 2) => {
 
     try {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 10000); 
+        const id = setTimeout(() => controller.abort(), 60000); // 1 Minute Timeout 
         
         const promise = fetch(url, { ...options, signal: controller.signal })
             .then(res => {
