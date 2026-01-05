@@ -10,20 +10,20 @@ import {
   Play, UserMinus, Mail, Clock, Flame, ThumbsUp, 
   Snowflake, UserCheck, ShieldCheck, Camera, Mic, 
   Globe, Edit3, Link as LinkIcon, ChevronDown, ChevronUp, 
-  Briefcase, WifiOff, Save, LogOut, Search, Download, RefreshCcw, AlertTriangle, Lock
+  Briefcase, WifiOff, Save, LogOut, Search, Download, 
+  RefreshCcw, AlertTriangle, Lock, Share2, Users
 } from 'lucide-react';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxsnlkrlmzfDmhDVZNDj5wFaIHWCtb1WMwtwZYX3jHzyEZzqy_q3X_WLS-e1S7_0Hx4bA/exec";
+// 👇 PASTE YOUR DEPLOYMENT URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbzZP2th9vyttqNvNfs43hfNDeVGKQcaBRnc8FBJL-0KBjlqwpLPEhkVavdhvolGWGakyQ/exec";
 
-// 🔐 CHANGE THIS to something secret for yourself
 const ADMIN_PASSWORD = "thrivoy_boss"; 
-
 const ADMIN_KEY = "master";
 const LEAD_LIMIT = 100;
 
 const ANNOUNCEMENT = {
-    title: "V21.2 Live 🚀",
-    text: "Review mode, Undo support, and enhanced security active.",
+    title: "V21.3 Update 🚀",
+    text: "New: Universal Broadcast & Contact Import! Landlines now supported.",
     type: "info" 
 };
 
@@ -104,7 +104,7 @@ const fetchWithRetry = async (url, options, retries = 2) => {
 const normalizePhone = (input) => {
     if(!input) return "";
     const digits = input.replace(/\D/g, '');
-    if (digits.length < 8) return digits; 
+    if (digits.length < 7) return digits; // Short landlines
     if (digits.startsWith('0') || digits.startsWith('1800') || digits.length < 10) return digits;
     if (digits.length === 10) return '91' + digits;
     if (digits.length === 12 && digits.startsWith('91')) return digits;
@@ -148,9 +148,7 @@ function App() {
       return params.get("key") || safeStorage.getItem("thrivoy_client_id") || "";
   });
 
-  // 🔐 ADMIN STATE
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-
   const [publicProfileId, setPublicProfileId] = useState(null);
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState({ today: 0 });
@@ -196,7 +194,6 @@ function App() {
     } else if (clientId) {
         if(key) safeStorage.setItem("thrivoy_client_id", key);
         
-        // Skip profile fetch for master key
         if (clientId !== ADMIN_KEY) {
             fetchQueue(clientId); 
             signedRequest("GET_CLIENT_PROFILE", { client_id: clientId })
@@ -292,7 +289,6 @@ function App() {
 
   if (publicProfileId) return <DigitalCard profileId={publicProfileId} />;
   
-  // 🔐 ADMIN LOGIN FLOW
   if (clientId === ADMIN_KEY) {
       if (!isAdminAuthenticated) {
           return <AdminLogin onLogin={() => setIsAdminAuthenticated(true)} />;
@@ -302,7 +298,7 @@ function App() {
 
   if (!clientId) return <LandingPage />;
   
-  if(view === "menu") return <MenuScreen queue={queue} stats={stats} status={status} onViewChange={(newView) => { if(newView === "manual") { setPrefillData(null); setStatus(""); } navigateTo(newView); }} onUpload={handleFileUpload} announcement={ANNOUNCEMENT} clientId={clientId} />;
+  if(view === "menu") return <MenuScreen queue={queue} stats={stats} status={status} onViewChange={(newView) => { if(newView === "manual") { setPrefillData(null); setStatus(""); } navigateTo(newView); }} onUpload={handleFileUpload} announcement={ANNOUNCEMENT} clientId={clientId} onBulkSubmit={handleBulkSubmit} />;
   if(view === "hotlist") return <HotList clientId={clientId} onBack={() => window.history.back()} />;
   if(view === "stack") return <CardStack clientId={clientId} queue={queue} setQueue={setQueue} template={template} library={library} onBack={() => { fetchQueue(clientId); window.history.back(); }} />;
   if(view === "settings") return <SettingsForm currentTemplate={template} library={library} onSaveActive={saveActiveTemplate} onAddToLib={addToLibrary} onRemoveFromLib={removeFromLibrary} onBack={() => window.history.back()} userProfile={userProfile} clientId={clientId} onLogout={logout} />;
@@ -315,7 +311,6 @@ function App() {
   return <div className="h-screen flex items-center justify-center">Loading Thrivoy...</div>;
 }
 
-// 🔐 NEW: Admin Login Component
 function AdminLogin({ onLogin }) {
     const [password, setPassword] = useState("");
     const [error, setError] = useState(false);
@@ -348,9 +343,32 @@ function AdminLogin({ onLogin }) {
     );
 }
 
-function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement, clientId }) {
+function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement, clientId, onBulkSubmit }) {
     const shareMyCard = () => { const url = `${window.location.origin}/?u=${clientId}`; if (navigator.share) navigator.share({ title: 'My Digital Card', url }); else window.open(`https://wa.me/?text=${encodeURIComponent(url)}`); };
     const leadPercent = Math.min(100, (queue.length / LEAD_LIMIT) * 100);
+
+    // 👇 NEW FEATURE: Contact Picker
+    const importContacts = async () => {
+      if ('contacts' in navigator && 'ContactsManager' in window) {
+        try {
+          const props = ['name', 'tel'];
+          const opts = { multiple: true };
+          const contacts = await navigator.contacts.select(props, opts);
+          if (contacts.length > 0) {
+             const formatted = contacts.map(c => ({
+               name: c.name[0],
+               phone: c.tel[0],
+               context: "Imported from Phonebook"
+             }));
+             onBulkSubmit(formatted);
+          }
+        } catch (ex) {
+          // User cancelled
+        }
+      } else {
+        alert("Not supported on this device. Use 'AI Paste' instead.");
+      }
+    };
 
     return (
       <div className="p-6 max-w-md mx-auto space-y-6 animate-in fade-in pb-24">
@@ -380,6 +398,11 @@ function MenuScreen({ queue, stats, status, onViewChange, onUpload, announcement
           <div className="grid grid-cols-2 gap-4"><button onClick={() => onViewChange("camera")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><Camera size={24} className="text-orange-500"/><span className="font-bold text-sm">Scan Card</span></button><button onClick={() => onViewChange("bulk")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><Wand2 size={24} className="text-purple-600"/><span className="font-bold text-sm">AI Paste</span></button></div>
           <div className="grid grid-cols-2 gap-4"><button onClick={() => onViewChange("manual")} className="bg-white border border-gray-200 text-gray-700 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-gray-50"><UserPlus size={24} className="text-blue-600"/><span className="font-bold text-sm">Add One</span></button><button onClick={() => onViewChange("hotlist")} className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 hover:bg-orange-100"><Flame size={24}/><span className="font-bold text-sm">Hot Vault</span></button></div>
           
+          {/* 👇 NEW FEATURE: Contact Import Button */}
+          {('contacts' in navigator) && (
+            <button onClick={importContacts} className="w-full bg-indigo-50 text-indigo-700 p-3 rounded-xl border border-indigo-100 font-bold flex items-center justify-center gap-2"><Users size={20}/> Import from Contacts</button>
+          )}
+
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center"><Upload className="mx-auto mb-2 text-gray-400"/><p className="text-sm text-gray-500 mb-4">Have a CSV file?</p><label className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-200 transition-colors">Upload CSV <input type="file" accept=".csv" onChange={onUpload} className="hidden"/></label></div>
           
           {queue.length > 0 && (<button onClick={() => onViewChange("stack")} className="w-full bg-green-600 text-white p-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-green-700"><Play size={20} fill="currentColor"/> Start Calling ({queue.length})</button>)}
@@ -437,6 +460,24 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
 
     const handlePrimaryAction = async () => {
         vibrate(); // Haptic
+        
+        // 👇 NEW FEATURE: Universal Broadcast
+        if (actionType === 'share') {
+             if (navigator.share) {
+                try {
+                  await navigator.share({
+                    title: `Message for ${active.name}`,
+                    text: currentMessage,
+                    files: file ? [file] : undefined
+                  });
+                  setMode("disposition");
+                } catch(e) { console.log(e); }
+             } else {
+               alert("Browser does not support sharing.");
+             }
+             return;
+        }
+
         if (actionType === 'call') { 
             window.open(`tel:${active.phone}`, '_self'); setMode("disposition"); 
         } else if (actionType === 'email') {
@@ -512,7 +553,7 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
         <div className="h-screen flex flex-col items-center justify-center p-6 bg-purple-900 text-white animate-in fade-in"><h2 className="text-2xl font-bold mb-8">Snooze...</h2><div className="gap-4 grid w-full max-w-xs"><button onClick={() => addToCalendar(1)} className="bg-purple-600 p-4 rounded-xl font-bold">Tomorrow</button><button onClick={() => addToCalendar(3)} className="bg-purple-600 p-4 rounded-xl font-bold">3 Days</button><button onClick={() => addToCalendar(7)} className="bg-purple-600 p-4 rounded-xl font-bold">Next Week</button></div><button onClick={() => setMode("card")} className="mt-8 underline text-sm">Cancel</button></div>
     );
 
-    const getBtnColor = () => { if(actionType === 'email') return 'bg-purple-600'; if(actionType === 'call') return 'bg-blue-600'; return 'bg-green-500'; };
+    const getBtnColor = () => { if(actionType === 'email') return 'bg-purple-600'; if(actionType === 'call') return 'bg-blue-600'; if(actionType === 'share') return 'bg-pink-600'; return 'bg-green-500'; };
 
     return (
         <div className="h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative overflow-hidden">
@@ -521,6 +562,7 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
                 <button onClick={() => setActionType('whatsapp')} className={`p-2 rounded-md ${actionType === 'whatsapp' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}><Zap size={20}/></button>
                 <button onClick={() => setActionType('call')} className={`p-2 rounded-md ${actionType === 'call' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Phone size={20}/></button>
                 <button onClick={() => setActionType('email')} className={`p-2 rounded-md ${actionType === 'email' ? 'bg-white shadow text-purple-600' : 'text-gray-400'}`}><Mail size={20}/></button>
+                <button onClick={() => setActionType('share')} className={`p-2 rounded-md ${actionType === 'share' ? 'bg-white shadow text-pink-600' : 'text-gray-400'}`}><Share2 size={20}/></button>
             </div>
             
             <AnimatePresence>
@@ -534,14 +576,15 @@ function CardStack({ queue, setQueue, template, library, onBack, clientId }) {
             </AnimatePresence>
 
             <motion.div animate={controls} className="bg-white w-full h-full max-h-[80vh] rounded-3xl shadow-2xl p-6 flex flex-col justify-between relative overflow-hidden mt-8 mx-auto" style={{ position: 'relative', left: 0, right: 0 }}>
+                {/* 👇 FIXED: Added overflow-y-auto to allow scrolling on small laptops */}
                 <div className="space-y-4 flex-1 flex flex-col min-h-0 relative overflow-y-auto pr-2">
                    {polyglotMenu && (<div className="absolute top-10 right-0 z-20 bg-white border shadow-xl rounded-xl p-2 w-48 animate-in fade-in"><button onClick={() => handleAiRewrite("Professional", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👔 Professional</button><button onClick={() => handleAiRewrite("Friendly", "English")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">👋 Friendly</button><button onClick={() => handleAiRewrite("Persuasive", "Hindi")} className="w-full text-left p-2 hover:bg-gray-50 rounded text-sm font-bold">🇮🇳 Hindi</button><button onClick={() => setPolyglotMenu(false)} className="w-full text-center text-xs text-red-400 mt-2">Close</button></div>)}
                    {identity && (<div className="bg-purple-50 text-purple-900 px-3 py-1 rounded-full text-xs font-bold inline-block self-start border border-purple-100 flex items-center gap-2"><Briefcase size={12}/> {identity}</div>)}
                    <div className="relative shrink-0"><input value={intent} onChange={(e) => {const n=[...queue]; n[0].context=e.target.value + (identity ? " ||| " + identity : ""); setQueue(n)}} className="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded w-full outline-none" /><button onClick={() => setPolyglotMenu(!polyglotMenu)} className="absolute right-0 top-0 p-1 text-purple-600"><Wand2 size={16}/></button></div>
                    <div className="shrink-0"><input value={active.name} onChange={(e) => {const n=[...queue]; n[0].name=e.target.value; setQueue(n)}} className="text-3xl font-bold text-gray-800 w-full outline-none" placeholder="Unknown Name" /><div className="text-gray-400 font-mono text-sm">+{active.phone} {active.email && "• 📧"}</div></div>
-                   {actionType === 'whatsapp' ? (<><textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none min-h-[8rem]" /><label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label></>) : (<div className={`bg-gray-50 p-3 rounded-lg text-xs text-gray-800 flex-1 flex flex-col items-center justify-center font-bold border border-gray-100`}>{actionType === 'call' ? <Phone size={48} className="text-blue-200 mb-2"/> : <Mail size={48} className="text-purple-200 mb-2"/>}{actionType === 'call' ? "Power Dialer Mode Active" : "Email Mode Active"}{actionType === 'email' && <div className="text-[10px] text-gray-400 font-normal mt-2">{active.email || "No Email Found"}</div>}</div>)}
+                   {(actionType === 'whatsapp' || actionType === 'share') ? (<><textarea value={currentMessage} onChange={e => setCurrentMessage(e.target.value)} className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 flex-1 w-full outline-none resize-none min-h-[8rem]" /><label className={`block border-2 border-dashed rounded-xl p-2 text-center cursor-pointer shrink-0 ${file ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}><input type="file" accept="image/*,.pdf" onChange={(e)=>setFile(e.target.files[0])} className="hidden" /><div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-500">{file ? "Attached" : "Attach Photo"}</div></label></>) : (<div className={`bg-gray-50 p-3 rounded-lg text-xs text-gray-800 flex-1 flex flex-col items-center justify-center font-bold border border-gray-100`}>{actionType === 'call' ? <Phone size={48} className="text-blue-200 mb-2"/> : <Mail size={48} className="text-purple-200 mb-2"/>}{actionType === 'call' ? "Power Dialer Mode Active" : "Email Mode Active"}{actionType === 'email' && <div className="text-[10px] text-gray-400 font-normal mt-2">{active.email || "No Email Found"}</div>}</div>)}
                 </div>
-                <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${getBtnColor()}`}>{actionType === 'call' ? <><Phone size={24}/> DIAL</> : actionType === 'email' ? <><Mail size={24}/> SEND MAIL</> : <><Zap size={24}/> WhatsApp</>}</button><div className="flex gap-2"><button onClick={handleSkip} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
+                <div className="mt-4 space-y-2 shrink-0"><button onClick={handlePrimaryAction} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 text-white shadow-lg ${getBtnColor()}`}>{actionType === 'call' ? <><Phone size={24}/> DIAL</> : actionType === 'email' ? <><Mail size={24}/> SEND MAIL</> : actionType === 'share' ? <><Share2 size={24}/> BROADCAST</> : <><Zap size={24}/> WhatsApp</>}</button><div className="flex gap-2"><button onClick={handleSkip} className="flex-1 py-3 rounded-xl font-bold text-gray-500 bg-gray-50 flex items-center justify-center gap-2"><Trash2 size={18} /> Skip</button><button onClick={() => setMode("snooze")} className="px-4 py-3 rounded-xl font-bold text-purple-600 bg-purple-50 flex items-center justify-center"><Clock size={18} /></button></div></div>
             </motion.div>
         </div>
     ); 
@@ -556,7 +599,6 @@ function ManualForm({ onBack, onSubmit, status, prefill }) {
     const [context, setContext] = useState(prefill ? (prefill.context || "") : ""); 
     const [listening, setListening] = useState(false);
     
-    // 🛡️ MEMORY LEAK FIX: Cleanup Ref
     const recognitionRef = useRef(null);
 
     useEffect(() => { 
@@ -605,7 +647,6 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
         const file = e.target.files[0]; 
         if(!file) return; 
         
-        // 🛡️ CLEANUP: Revoke old URL
         const reader = new FileReader(); 
         reader.onload = (readerEvent) => { 
             const img = new Image(); 
@@ -658,9 +699,9 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
 
     const handleSave = async () => { 
         vibrate();
-        const invalid = parsed.filter(l => !l.phone || l.phone.replace(/\D/g,'').length < 8);
+        const invalid = parsed.filter(l => !l.phone || l.phone.replace(/\D/g,'').length < 6);
         if(invalid.length > 0) {
-            alert(`⚠️ ${invalid.length} leads have invalid/short phone numbers. Fix or delete them.`);
+            alert(`⚠️ ${invalid.length} leads have invalid phone numbers. Fix or delete them.`);
             return;
         }
         await onSubmit(parsed); 
@@ -680,7 +721,7 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
                             <input value={l.name} onChange={(e) => updateField(i, 'name', e.target.value)} className="w-full font-bold text-gray-800 outline-none border-b border-transparent focus:border-blue-500 transition-colors placeholder-gray-300" placeholder="Name"/>
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-400 text-xs">+91</span>
-                                <input value={l.phone.replace(/^91/, '')} onChange={(e) => updateField(i, 'phone', '91' + e.target.value.replace(/\D/g,''))} className={`w-full text-sm outline-none border-b border-transparent focus:border-blue-500 font-mono ${(!l.phone || l.phone.replace(/\D/g,'').length < 10) ? 'text-red-500' : 'text-gray-600'}`} placeholder="Phone"/>
+                                <input value={l.phone.replace(/^91/, '')} onChange={(e) => updateField(i, 'phone', '91' + e.target.value.replace(/\D/g,''))} className={`w-full text-sm outline-none border-b border-transparent focus:border-blue-500 font-mono ${(!l.phone || l.phone.replace(/\D/g,'').length < 6) ? 'text-red-500' : 'text-gray-600'}`} placeholder="Phone"/>
                             </div>
                             <input value={l.context} onChange={(e) => updateField(i, 'context', e.target.value)} className="w-full text-xs text-blue-600 bg-blue-50 p-2 rounded outline-none" placeholder="Context / Note"/>
                         </div>
@@ -718,7 +759,6 @@ function QueueList({ queue, setQueue, library, onBack, onLaunchStack }) {
     const toggleSelect = (id) => { if (selected.includes(id)) setSelected(selected.filter(i => i !== id)); else setSelected([...selected, id]); }; 
     const toggleAll = () => { if (selected.length === queue.length) setSelected([]); else setSelected(queue.map(q => q.lead_id)); }; 
     
-    // Syntax Corrected confirm with backticks
     const deleteSelected = async () => { if(!confirm(`Archive ${selected.length} leads?`)) return; const newQueue = queue.filter(q => !selected.includes(q.lead_id)); setQueue(newQueue); selected.forEach(id => signedRequest("MARK_SENT", { lead_id: id, outcome: "Archived" })); setSelected([]); }; 
     
     const launchCampaign = () => { if(selected.length === 0) return alert("Select at least one!"); const campaignQueue = queue.filter(q => selected.includes(q.lead_id)).map(q => ({ ...q, context: bulkContext || q.context })); setQueue(campaignQueue); onLaunchStack(); }; 
@@ -745,50 +785,50 @@ function HelpScreen({ onBack }) { return (<div className="p-6 max-w-md mx-auto h
 function LandingPage() { return (<div className="min-h-screen bg-white flex flex-col font-sans text-gray-900"><div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-8 max-w-4xl mx-auto pt-20"><div className="w-20 h-20 bg-orange-100 rounded-3xl flex items-center justify-center mb-4 shadow-sm animate-bounce"><Zap size={40} className="text-orange-600" /></div><h1 className="text-5xl md:text-7xl font-black text-gray-900 leading-tight tracking-tight">Notebooks to <span className="text-orange-600">Revenue</span>.</h1><p className="text-xl text-gray-500 leading-relaxed max-w-2xl mx-auto">The #1 Sales Tool for India. Scan leads, attach photos, and switch to <strong>Power Dialer</strong> mode for instant cold calling.</p><div className="flex flex-col sm:flex-row gap-4 w-full justify-center"><button onClick={() => window.open(`https://wa.me/917892159170?text=I%20want%20Revive%20access`, '_blank')} className="px-8 py-4 bg-orange-600 text-white rounded-xl font-bold text-lg shadow-xl hover:bg-orange-700 hover:scale-105 transition-all">Get Free Access 🇮🇳</button><button onClick={() => document.getElementById('features').scrollIntoView({ behavior: 'smooth' })} className="px-8 py-4 bg-gray-100 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-200">See Features</button></div></div><div id="features" className="py-20 px-6 bg-gray-50"><div className="max-w-5xl mx-auto"><h2 className="text-3xl font-black text-center text-gray-900 mb-12">The Complete Sales Stack</h2><div className="grid md:grid-cols-3 gap-8"><FeatureCard icon={<ScanLine />} title="Scan & Extract" text="Digitise handwritten notebooks or cards instantly with AI extraction." /><FeatureCard icon={<Phone />} title="Power Dialer" text="Switch to Call Mode. Dial 50 leads in 30 mins without typing a digit." /><FeatureCard icon={<ClipboardPaste />} title="Attach Media" text="Send brochures, price lists, or property photos via WhatsApp." /></div></div></div><div className="py-20 px-6 bg-white border-t border-gray-100"><div className="max-w-5xl mx-auto"><h2 className="text-3xl font-black text-center text-gray-900 mb-12">Who uses Thrivoy?</h2><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"><UseCaseCard icon={<Flame/>} title="Real Estate" text="Send property photos & brochures to 50 leads in minutes." /><UseCaseCard icon={<Phone/>} title="Used Cars" text="Walkaround videos & car details sent instantly after a call." /><UseCaseCard icon={<ShieldCheck/>} title="Insurance" text="Scan handwritten leads & send policy PDFs effortlessly." /><UseCaseCard icon={<Zap/>} title="Gym Owners" text="Send membership price cards to old inquiries." /></div></div></div><div id="pricing" className="py-20 px-6 bg-white"><div className="max-w-5xl mx-auto"><h2 className="text-4xl font-black text-center text-gray-900 mb-4">Pricing for India 🇮🇳</h2><p className="text-center text-gray-500 mb-12 text-lg">Invest in your sales speed.</p><div className="grid md:grid-cols-3 gap-8"><PricingCard title="Starter" price="₹0" btn="Try Free" features={["100 Leads", "Basic Scan", "Text Only"]} /><PricingCard title="Pro Hustler" price="₹999" highlight btn="Get Pro" features={["Unlimited Leads", "Power Dialer Mode", "Send Photos/PDFs", "Calendar Sync"]} /><PricingCard title="Corporate" price="Custom" btn="Contact Sales" features={["Private Data", "Team Admin", "GST Invoice"]} /></div></div></div><div className="py-20 px-6 bg-gray-50"><div className="max-w-3xl mx-auto"><h2 className="text-3xl font-black text-center text-gray-900 mb-12">Frequently Asked Questions</h2><div className="space-y-4"><FAQItem q="Is the data safe?" a="Yes. Your data is stored in your own Google Sheet. We do not sell or see your client data." /><FAQItem q="Does it work on iPhone?" a="Yes. Thrivoy works on any phone browser (Chrome/Safari). No app store download needed." /><FAQItem q="Can I add team members?" a="Currently, Thrivoy is for solo hustlers. Team features are coming in the Corporate plan." /></div></div></div><div className="p-6 bg-gray-900 text-center text-gray-500 text-sm"><p>&copy; 2025 Thrivoy Inc. Made for India 🇮🇳</p></div></div>); }
 
 function FeatureCard({ icon, title, text }) { 
-    return (
-        <div className="bg-white p-8 rounded-3xl border border-gray-100 hover:shadow-xl transition-shadow">
-            <div className="text-blue-600 bg-blue-50 p-4 rounded-xl w-16 h-16 flex items-center justify-center mb-6">{icon}</div>
-            <h3 className="font-bold text-xl text-gray-900 mb-3">{title}</h3>
-            <p className="text-gray-500 leading-relaxed">{text}</p>
-        </div>
-    ); 
+    return (
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 hover:shadow-xl transition-shadow">
+            <div className="text-blue-600 bg-blue-50 p-4 rounded-xl w-16 h-16 flex items-center justify-center mb-6">{icon}</div>
+            <h3 className="font-bold text-xl text-gray-900 mb-3">{title}</h3>
+            <p className="text-gray-500 leading-relaxed">{text}</p>
+        </div>
+    ); 
 }
 
 function UseCaseCard({ icon, title, text }) { 
-    return (
-        <div className="p-6 rounded-2xl border border-gray-100 hover:shadow-lg transition-shadow bg-gray-50">
-            <div className="text-orange-600 mb-4">{icon}</div>
-            <h3 className="font-bold text-lg mb-2">{title}</h3>
-            <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
-        </div>
-    ); 
+    return (
+        <div className="p-6 rounded-2xl border border-gray-100 hover:shadow-lg transition-shadow bg-gray-50">
+            <div className="text-orange-600 mb-4">{icon}</div>
+            <h3 className="font-bold text-lg mb-2">{title}</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
+        </div>
+    ); 
 }
 
 function PricingCard({ title, price, highlight, btn, features }) { 
-    return (
-        <div className={`rounded-3xl p-8 flex flex-col ${highlight ? 'border-2 border-orange-500 bg-orange-50 shadow-2xl transform md:-translate-y-4' : 'border border-gray-200 hover:shadow-xl'}`}>
-            {highlight && <div className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-2">Best Value</div>}
-            <h3 className="text-xl font-bold text-gray-800 mb-2">{title}</h3>
-            <div className="text-4xl font-black text-gray-900 mb-6">{price}</div>
-            <ul className="space-y-4 mb-8 flex-1">
-                {features.map((f,i) => <li key={i} className="flex gap-2 text-sm font-bold text-gray-600"><CheckSquare size={16} className={highlight ? "text-orange-600" : "text-gray-400"}/> {f}</li>)}
-            </ul>
-            <button className={`w-full py-4 rounded-xl font-bold ${highlight ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{btn}</button>
-        </div>
-    ); 
+    return (
+        <div className={`rounded-3xl p-8 flex flex-col ${highlight ? 'border-2 border-orange-500 bg-orange-50 shadow-2xl transform md:-translate-y-4' : 'border border-gray-200 hover:shadow-xl'}`}>
+            {highlight && <div className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-2">Best Value</div>}
+            <h3 className="text-xl font-bold text-gray-800 mb-2">{title}</h3>
+            <div className="text-4xl font-black text-gray-900 mb-6">{price}</div>
+            <ul className="space-y-4 mb-8 flex-1">
+                {features.map((f,i) => <li key={i} className="flex gap-2 text-sm font-bold text-gray-600"><CheckSquare size={16} className={highlight ? "text-orange-600" : "text-gray-400"}/> {f}</li>)}
+            </ul>
+            <button className={`w-full py-4 rounded-xl font-bold ${highlight ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{btn}</button>
+        </div>
+    ); 
 }
 
 function FAQItem({ q, a }) {
-    const [open, setOpen] = useState(false);
-    return (
-        <div onClick={() => setOpen(!open)} className="cursor-pointer border-b border-gray-200 pb-4 bg-white p-4 rounded-xl hover:bg-gray-50 transition-colors">
-            <div className="flex justify-between items-center">
-                <h3 className="font-bold text-gray-800 text-sm">{q}</h3>
-                {open ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
-            </div>
-            {open && <p className="text-sm text-gray-500 mt-2 leading-relaxed animate-in fade-in slide-in-from-top-2">{a}</p>}
-        </div>
-    );
+    const [open, setOpen] = useState(false);
+    return (
+        <div onClick={() => setOpen(!open)} className="cursor-pointer border-b border-gray-200 pb-4 bg-white p-4 rounded-xl hover:bg-gray-50 transition-colors">
+            <div className="flex justify-between items-center">
+                <h3 className="font-bold text-gray-800 text-sm">{q}</h3>
+                {open ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+            </div>
+            {open && <p className="text-sm text-gray-500 mt-2 leading-relaxed animate-in fade-in slide-in-from-top-2">{a}</p>}
+        </div>
+    );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
