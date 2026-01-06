@@ -14,16 +14,16 @@ import {
   RefreshCcw, AlertTriangle, Lock, Share2, Users
 } from 'lucide-react';
 
-// 👇 PASTE YOUR DEPLOYMENT URL HERE
-const API_URL = "https://script.google.com/macros/s/AKfycbyxOQZmJmtFlUjStWXvbhvP5yGawbcw2FUYrMw1Rp0F3cg7-OMOfxw8xjjdXW_Qy4MfTw/exec";
+// 👇 PASTE YOUR NEW DEPLOYMENT URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbydLcXdlyr-MUY5CukRXt6TSHpcN05a34R2UjedbwFLYXoseg02VaRIgJ5Wl4_domRJ_Q/exec";
 
 const ADMIN_PASSWORD = "thrivoy_boss"; 
 const ADMIN_KEY = "master";
 const LEAD_LIMIT = 100;
 
 const ANNOUNCEMENT = {
-    title: "V21.3 Update 🚀",
-    text: "New: Universal Broadcast & Contact Import! Landlines now supported.",
+    title: "System Update 🚀",
+    text: "Engine Reloaded. If you see errors, please refresh the page.",
     type: "info" 
 };
 
@@ -67,7 +67,7 @@ async function signedRequest(action, payload) {
   });
 }
 
-// 🛡️ HELPER: Network Request with Deduplication
+// 🛡️ HELPER: Network Request with Deduplication & Extended Timeout
 const requestCache = new Map();
 const fetchWithRetry = async (url, options, retries = 2) => {
     if (options.body && options.body.includes("GET_QUEUE")) {
@@ -77,7 +77,8 @@ const fetchWithRetry = async (url, options, retries = 2) => {
 
     try {
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 60000); // 1 Minute Timeout 
+        // ✅ FIX: Increased timeout to 60s for AI
+        const id = setTimeout(() => controller.abort(), 60000); 
         
         const promise = fetch(url, { ...options, signal: controller.signal })
             .then(res => {
@@ -104,7 +105,7 @@ const fetchWithRetry = async (url, options, retries = 2) => {
 const normalizePhone = (input) => {
     if(!input) return "";
     const digits = input.replace(/\D/g, '');
-    if (digits.length < 7) return digits; // Short landlines
+    if (digits.length < 7) return digits; 
     if (digits.startsWith('0') || digits.startsWith('1800') || digits.length < 10) return digits;
     if (digits.length === 10) return '91' + digits;
     if (digits.length === 12 && digits.startsWith('91')) return digits;
@@ -683,7 +684,8 @@ function BulkPasteForm({ onBack, onSubmit, initialData, clientId }) {
     const handleSmartScan = async () => { 
         if(!text) return; 
         setLoading(true); 
-        const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI Timeout. Try less text."); } }, 15000);
+        // ✅ FIX: Increased timeout to 60s for AI
+        const timeoutId = setTimeout(() => { if(loading) { setLoading(false); alert("⚠️ AI Timeout. Try less text."); } }, 60000);
         try { 
             const res = await signedRequest("AI_PARSE_TEXT", { client_id: clientId, text });
             const json = await res.json(); 
