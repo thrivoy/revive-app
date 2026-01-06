@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// Standard imports (Vite config will now map these to the right file)
-import { FixedSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+// --- SAFE IMPORT FIX ---
+// 1. Import * captures the module regardless of format (ESM/CJS)
+// 2. We check for the export directly, OR safely check .default
+import * as ReactWindowPkg from 'react-window';
+const List = ReactWindowPkg.FixedSizeList || ReactWindowPkg.default?.FixedSizeList;
+
+import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
+const AutoSizer = AutoSizerPkg.default || AutoSizerPkg;
+// -----------------------
 
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
