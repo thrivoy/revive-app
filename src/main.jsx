@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 
-// --- FIX: Bulletproof Imports for Legacy Libraries ---
-import * as ReactWindow from 'react-window';
-const List = ReactWindow.FixedSizeList || ReactWindow.default.FixedSizeList;
-
-import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
-const AutoSizer = AutoSizerPkg.default || AutoSizerPkg;
-// ----------------------------------------------------
+// Clean standard imports (Vite config will now map these correctly)
+import { FixedSizeList as List } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
