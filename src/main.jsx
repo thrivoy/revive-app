@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FixedSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+
+// --- FIX: Bulletproof Import for AutoSizer ---
+import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
+const AutoSizer = AutoSizerPkg.default || AutoSizerPkg;
+
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import { 
