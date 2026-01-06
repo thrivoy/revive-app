@@ -5,9 +5,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // ⬇️ FORCE VITE TO USE THE STABLE COMMONJS BUILDS ⬇️
-      'react-window': 'react-window/dist/index.cjs.js',
-      'react-virtualized-auto-sizer': 'react-virtualized-auto-sizer/dist/index.cjs.js',
+      // FIX: Point to the actual file (index.js, not index.cjs.js)
+      'react-window': 'react-window/dist/index.js',
+      'react-virtualized-auto-sizer': 'react-virtualized-auto-sizer/dist/index.js',
     },
   },
 })
