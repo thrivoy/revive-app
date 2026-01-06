@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { FixedSizeList as List } from 'react-window';
 
-// --- FIX: Bulletproof Import for AutoSizer ---
+// --- FIX: Bulletproof Imports for Legacy Libraries ---
+import * as ReactWindow from 'react-window';
+const List = ReactWindow.FixedSizeList || ReactWindow.default.FixedSizeList;
+
 import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
 const AutoSizer = AutoSizerPkg.default || AutoSizerPkg;
+// ----------------------------------------------------
 
 import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
