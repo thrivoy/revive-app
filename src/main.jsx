@@ -810,120 +810,222 @@ function AdminLogin({ onLogin }) {
 }
 
 function LandingPage() {
-  // Logic to handle the Invite Key login
   const handleLogin = (e) => {
     e.preventDefault();
     const k = e.target.key.value;
     if(k) window.location.search = `?key=${k}`;
   };
 
+  const scrollToLogin = () => {
+    document.getElementById('login-form').scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100">
       
       {/* --- NAVBAR --- */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-black text-xl tracking-tight">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg">T</div>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg shadow-blue-200 shadow-lg">T</div>
             Thrivoy
           </div>
-          <a href="#login" className="text-sm font-bold text-gray-600 hover:text-blue-600 transition-colors">
+          <button onClick={scrollToLogin} className="text-sm font-bold bg-gray-900 text-white px-5 py-2 rounded-full hover:bg-black transition-colors">
             Member Login
-          </a>
+          </button>
         </div>
       </nav>
 
       {/* --- HERO SECTION --- */}
-      <header className="relative pt-20 pb-32 overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-blue-50 rounded-full blur-3xl -z-10 opacity-60"></div>
+      <header className="relative pt-20 pb-32 overflow-hidden bg-gradient-to-b from-white to-gray-50/50">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-100/40 rounded-full blur-[100px] -z-10"></div>
         
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="inline-block mb-6 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider">
-            v2.0 Now Live
+          <div className="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider shadow-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            v2.0 Now Live for India
           </div>
+          
           <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-gray-900 leading-[1.1]">
-            Close leads <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">faster</span>.<br/>
-            No spreadsheets attached.
+            Stop managing leads.<br/>
+            Start <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">closing deals</span>.
           </h1>
+          
           <p className="text-xl text-gray-500 mb-10 max-w-2xl mx-auto leading-relaxed">
-            The high-performance engine for pros. Capture leads instantly, 
-            organize with AI, and convert customers without the clutter.
+            The secret weapon for Real Estate, Insurance, and Sales pros. 
+            Ditch the diaries and messy Excel sheets.
           </p>
 
-          {/* --- THE "GATEKEEPER" (Login Box) --- */}
-          <div id="login" className="bg-white p-2 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
+          {/* --- LOGIN BOX (THE GATEKEEPER) --- */}
+          <div id="login-form" className="bg-white p-3 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
             <form onSubmit={handleLogin} className="flex gap-2">
               <input 
                 name="key" 
-                placeholder="Enter your Invite Key" 
-                className="flex-1 bg-gray-50 text-gray-900 font-bold px-6 py-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:font-normal placeholder:text-gray-400"
+                placeholder="Enter Invite Key" 
+                className="flex-1 bg-gray-50 text-gray-900 font-bold px-6 py-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:font-medium placeholder:text-gray-400"
               />
-              <button className="bg-gray-900 hover:bg-black text-white px-8 py-4 rounded-xl font-bold transition-colors flex items-center gap-2">
-                Enter <ChevronRight size={18}/>
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-lg shadow-blue-200">
+                Enter <ArrowLeft size={18} className="rotate-180"/>
               </button>
             </form>
           </div>
-          <p className="mt-4 text-xs text-gray-400 font-medium">
-            <Lock size={12} className="inline mb-0.5 mr-1"/> 
-            Secure Access • Invite Only
+          <p className="mt-6 text-sm text-gray-500 font-medium">
+            Don't have a key? <a href="#" className="text-blue-600 hover:underline">Request access</a>
           </p>
         </div>
       </header>
 
-      {/* --- FEATURES GRID --- */}
-      <section className="py-24 bg-gray-50 border-t border-gray-200">
-        <div className="max-w-5xl mx-auto px-6">
+      {/* --- HOW IT WORKS --- */}
+      <section className="py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-black mb-4">Why Top Producers Switch</h2>
-            <p className="text-gray-500">Stop fighting your CRM. Start fighting for revenue.</p>
+            <h2 className="text-3xl font-black mb-4 text-gray-900">3 Steps to Revenue</h2>
+            <p className="text-gray-500">Simple enough for beginners. Powerful enough for top tier agents.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Feature 1 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
-                <Wand2 size={24} />
+          <div className="grid md:grid-cols-3 gap-12 relative">
+            {/* Connector Line (Desktop Only) */}
+            <div className="hidden md:block absolute top-12 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-gray-200 via-blue-200 to-gray-200 -z-10"></div>
+
+            <div className="text-center bg-white">
+              <div className="w-24 h-24 mx-auto bg-blue-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
+                <Upload size={32} className="text-blue-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-3">AI Import</h3>
-              <p className="text-gray-500 leading-relaxed">
-                Paste messy text from WhatsApp or Excel. Our AI extracts names and numbers instantly.
-              </p>
+              <h3 className="text-xl font-bold mb-2">1. Dump the Data</h3>
+              <p className="text-gray-500 text-sm px-4">Paste messy WhatsApp lists, forward emails, or upload CSVs. Our AI cleans it instantly.</p>
             </div>
 
-            {/* Feature 2 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-6">
-                <Flame size={24} />
+            <div className="text-center bg-white">
+              <div className="w-24 h-24 mx-auto bg-purple-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
+                <Wand2 size={32} className="text-purple-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-3">Hot Vault</h3>
-              <p className="text-gray-500 leading-relaxed">
-                Never lose a hot lead again. Isolate your best opportunities in a dedicated high-priority vault.
-              </p>
+              <h3 className="text-xl font-bold mb-2">2. AI Sorting</h3>
+              <p className="text-gray-500 text-sm px-4">Thrivoy identifies hot leads, categorizes them, and queues them up for calling.</p>
             </div>
 
-            {/* Feature 3 */}
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mb-6">
-                <ScanLine size={24} />
+            <div className="text-center bg-white">
+              <div className="w-24 h-24 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
+                <CheckCircle2 size={32} className="text-green-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-3">Digital Business Card</h3>
-              <p className="text-gray-500 leading-relaxed">
-                Share your unique link. When they sign up, they drop directly into your calling queue.
-              </p>
+              <h3 className="text-xl font-bold mb-2">3. Close & Repeat</h3>
+              <p className="text-gray-500 text-sm px-4">Speed dial through your list. Send WhatsApp follow-ups in 1 click. Double your speed.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* --- FOOTER --- */}
-      <footer className="py-12 bg-white border-t border-gray-200 text-center">
-        <div className="flex items-center justify-center gap-2 mb-4 text-gray-400">
-          <Globe size={16}/>
-          <span className="text-sm font-bold">Thrivoy Systems Inc.</span>
+      {/* --- CASE STUDIES --- */}
+      <section className="py-24 bg-slate-900 text-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <h2 className="text-3xl font-black mb-12 text-center">Built for Indian Markets</h2>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-blue-500 transition-colors">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center font-bold">RE</div>
+                <div>
+                  <h4 className="font-bold text-lg">Real Estate</h4>
+                  <p className="text-slate-400 text-sm">Managing 500+ site visits</p>
+                </div>
+              </div>
+              <p className="text-slate-300 mb-6 italic">"I used to lose leads in my phonebook. With Thrivoy, I dump all inquiries from MagicBricks and 99acres into the engine. My conversion jumped 40% in month one."</p>
+              <div className="flex gap-3 text-sm font-bold text-white items-center">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Vikram" className="w-8 h-8 rounded-full bg-slate-600"/>
+                Vikram S., Property Consultant, Pune
+              </div>
+            </div>
+
+            <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-green-500 transition-colors">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center font-bold">INS</div>
+                <div>
+                  <h4 className="font-bold text-lg">Insurance & Loans</h4>
+                  <p className="text-slate-400 text-sm">High volume calling</p>
+                </div>
+              </div>
+              <p className="text-slate-300 mb-6 italic">"Speed is everything. I can call 50 people in an hour using the Queue mode. The AI rewriting my WhatsApp messages makes me look super professional."</p>
+              <div className="flex gap-3 text-sm font-bold text-white items-center">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Priya" className="w-8 h-8 rounded-full bg-slate-600"/>
+                Priya M., Financial Advisor, Mumbai
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-gray-400 text-sm">
-          &copy; {new Date().getFullYear()} All rights reserved. 
-        </p>
+      </section>
+
+      {/* --- TESTIMONIALS --- */}
+      <section className="py-24 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-6">
+          <h2 className="text-3xl font-black mb-12 text-center text-gray-900">Trusted by 2,000+ Agents</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { name: "Rahul D.", role: "Solar Sales", text: "Finally, a CRM that doesn't feel like homework. It's fast." },
+              { name: "Sneha K.", role: "Freelancer", text: "The digital business card feature alone is worth it." },
+              { name: "Amit B.", role: "Car Dealer", text: "My team uses this daily. No more lost customer numbers." }
+            ].map((t, i) => (
+              <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex gap-1 text-orange-400 mb-3">
+                  <span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span>
+                </div>
+                <p className="text-gray-600 mb-4 text-sm font-medium">"{t.text}"</p>
+                <div className="font-bold text-gray-900 text-sm">{t.name}</div>
+                <div className="text-xs text-gray-400">{t.role}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* --- FAQ --- */}
+      <section className="py-24 bg-white border-t border-gray-100">
+        <div className="max-w-3xl mx-auto px-6">
+          <h2 className="text-3xl font-black mb-10 text-center">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+              <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
+                Is my client data safe?
+                <ChevronRight className="group-open:rotate-90 transition-transform"/>
+              </summary>
+              <p className="mt-4 text-gray-600 leading-relaxed">
+                100% Safe. Thrivoy is a "Headless" engine. We don't store your database. All your data lives in your own private Google Sheet. We just provide the fast interface to manage it.
+              </p>
+            </details>
+
+            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+              <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
+                Do I need a laptop?
+                <ChevronRight className="group-open:rotate-90 transition-transform"/>
+              </summary>
+              <p className="mt-4 text-gray-600 leading-relaxed">
+                No. Thrivoy is designed as a "Mobile First" web app. It works perfectly on your phone browser, making it easy to call and WhatsApp leads directly.
+              </p>
+            </details>
+
+            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+              <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
+                Does it work with WhatsApp?
+                <ChevronRight className="group-open:rotate-90 transition-transform"/>
+              </summary>
+              <p className="mt-4 text-gray-600 leading-relaxed">
+                Yes. We have a native "One-Click WhatsApp" button. You can also use our AI to rewrite messages to sound more professional or friendly before sending.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      {/* --- FOOTER CTA --- */}
+      <footer className="py-12 bg-white text-center border-t">
+        <h3 className="text-2xl font-bold mb-6">Ready to upgrade your workflow?</h3>
+        <button onClick={scrollToLogin} className="bg-gray-900 text-white px-8 py-4 rounded-xl font-bold hover:scale-105 transition-transform shadow-xl">
+          Enter Your Key
+        </button>
+        <div className="mt-12 text-gray-400 text-sm">
+          &copy; {new Date().getFullYear()} Thrivoy Systems. Made with <span className="text-red-400">♥</span> in India.
+        </div>
       </footer>
 
     </div>
