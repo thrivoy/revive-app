@@ -798,15 +798,39 @@ function AdminDashboard() {
 }
 
 function AdminLogin({ onLogin }) {
-    const [pw, setPw] = useState("");
-    return (
-        <div className="h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
-           <Lock size={48} className="mb-6 text-orange-500"/>
-           <h2 className="text-xl font-bold mb-6">Thrivoy Admin</h2>
-           <input type="password" value={pw} onChange={e => setPw(e.target.value)} className="w-full max-w-xs p-4 rounded-xl bg-slate-800 text-center mb-4 text-white font-bold tracking-widest outline-none border border-slate-700 focus:border-orange-500 transition-colors" placeholder="ENTER CODE" />
-           <button onClick={() => pw === ADMIN_PASSWORD ? onLogin() : alert("Access Denied")} className="w-full max-w-xs py-4 bg-orange-600 rounded-xl font-bold hover:bg-orange-700 transition-colors">UNLOCK</button>
-        </div>
-    );
+  const [pw, setPw] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault(); // Prevents page reload
+    // Check password (trim removes accidental spaces)
+    if (pw.trim() === ADMIN_PASSWORD) {
+      onLogin();
+    } else {
+      alert("Access Denied. Check capitalization.");
+    }
+  };
+
+  return (
+    <div className="h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
+      <Lock size={48} className="mb-6 text-orange-500" />
+      <h2 className="text-xl font-bold mb-6">Thrivoy Admin</h2>
+      
+      {/* Wrapped in form to enable "Enter" key submission */}
+      <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
+        <input
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          className="w-full p-4 rounded-xl bg-slate-800 text-center text-white font-bold tracking-widest outline-none border border-slate-700 focus:border-orange-500 transition-colors"
+          placeholder="ENTER CODE"
+          autoFocus
+        />
+        <button className="w-full py-4 bg-orange-600 rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20">
+          UNLOCK
+        </button>
+      </form>
+    </div>
+  );
 }
 
 function LandingPage() {
