@@ -1,3 +1,4 @@
+import './index.css';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -812,7 +813,8 @@ function LandingPage() {
     return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl mb-4 shadow-xl shadow-blue-200">T</div>
-            <h1 className="text-4xl font-black text-gray-900 mb-2 tracking-tight">Thrivoy</h1>
+            {/* Change strictly the color class */}
+            <h1 className="text-4xl font-black text-red-600 mb-2 tracking-tight">Thrivoy</h1>
             <p className="text-gray-500 mb-8 max-w-xs mx-auto">The high-performance lead management engine for pros.</p>
             <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-gray-100">
                 <p className="font-bold mb-4 text-gray-800">Have an invite key?</p>
