@@ -917,38 +917,95 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* --- CASE STUDIES --- */}
-      <section className="py-24 bg-slate-900 text-white">
+      {/* --- PRICING SECTION (NEW) --- */}
+      <section className="py-24 bg-gray-50 border-y border-gray-200">
         <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-black mb-12 text-center">Built for Indian Markets</h2>
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-black mb-4 text-gray-900">Simple, Transparent Pricing</h2>
+            <p className="text-gray-500">Pay for performance. Cancel anytime.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto items-center">
+            
+            {/* FREE TIER */}
+            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
+              <h3 className="font-bold text-lg text-gray-500 mb-2">Starter</h3>
+              <div className="text-4xl font-black mb-6">Free</div>
+              <ul className="space-y-4 mb-8 text-left text-sm text-gray-600">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 50 Leads Capacity</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Basic Calling Queue</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 1 Digital Card</li>
+                <li className="flex items-center gap-2 opacity-50"><X size={16}/> No AI Rewriting</li>
+              </ul>
+              <button onClick={scrollToLogin} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Try Free</button>
+            </div>
+
+            {/* PRO TIER (HIGHLIGHTED) */}
+            <div className="bg-gray-900 text-white p-8 rounded-3xl shadow-2xl relative transform scale-105 z-10">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-b-lg">MOST POPULAR</div>
+              <h3 className="font-bold text-lg text-gray-400 mb-2 mt-2">Pro Agent</h3>
+              <div className="text-5xl font-black mb-1">₹999<span className="text-lg font-medium text-gray-500">/mo</span></div>
+              <p className="text-gray-400 text-xs mb-6">Billed annually</p>
+              
+              <ul className="space-y-4 mb-8 text-left text-sm">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Unlimited Leads</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Full AI Suite (Parsing + Writing)</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Hot Lead Vault</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> WhatsApp Integration</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Priority Support</li>
+              </ul>
+              <button onClick={scrollToLogin} className="w-full py-4 rounded-xl bg-blue-600 font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/50">Get Started</button>
+            </div>
+
+            {/* TEAM TIER */}
+            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
+              <h3 className="font-bold text-lg text-gray-500 mb-2">Teams</h3>
+              <div className="text-4xl font-black mb-6">Custom</div>
+              <ul className="space-y-4 mb-8 text-left text-sm text-gray-600">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Everything in Pro</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Team Dashboard</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Lead Distribution</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Performance Analytics</li>
+              </ul>
+              <button onClick={scrollToLogin} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Contact Sales</button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* --- CASE STUDIES --- */}
+      <section className="py-24 bg-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <h2 className="text-3xl font-black mb-12 text-center text-gray-900">Built for Indian Markets</h2>
           
           <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-blue-500 transition-colors">
+            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:border-blue-500 transition-colors">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center font-bold">RE</div>
+                <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">RE</div>
                 <div>
-                  <h4 className="font-bold text-lg">Real Estate</h4>
-                  <p className="text-slate-400 text-sm">Managing 500+ site visits</p>
+                  <h4 className="font-bold text-lg text-gray-900">Real Estate</h4>
+                  <p className="text-gray-500 text-sm">Managing 500+ site visits</p>
                 </div>
               </div>
-              <p className="text-slate-300 mb-6 italic">"I used to lose leads in my phonebook. With Thrivoy, I dump all inquiries from MagicBricks and 99acres into the engine. My conversion jumped 40% in month one."</p>
-              <div className="flex gap-3 text-sm font-bold text-white items-center">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Vikram" className="w-8 h-8 rounded-full bg-slate-600"/>
+              <p className="text-gray-600 mb-6 italic">"I used to lose leads in my phonebook. With Thrivoy, I dump all inquiries from MagicBricks and 99acres into the engine. My conversion jumped 40% in month one."</p>
+              <div className="flex gap-3 text-sm font-bold text-gray-800 items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs">VS</div>
                 Vikram S., Property Consultant, Pune
               </div>
             </div>
 
-            <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 hover:border-green-500 transition-colors">
+            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:border-green-500 transition-colors">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center font-bold">INS</div>
+                <div className="w-12 h-12 bg-green-600 text-white rounded-full flex items-center justify-center font-bold">INS</div>
                 <div>
-                  <h4 className="font-bold text-lg">Insurance & Loans</h4>
-                  <p className="text-slate-400 text-sm">High volume calling</p>
+                  <h4 className="font-bold text-lg text-gray-900">Insurance & Loans</h4>
+                  <p className="text-gray-500 text-sm">High volume calling</p>
                 </div>
               </div>
-              <p className="text-slate-300 mb-6 italic">"Speed is everything. I can call 50 people in an hour using the Queue mode. The AI rewriting my WhatsApp messages makes me look super professional."</p>
-              <div className="flex gap-3 text-sm font-bold text-white items-center">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Priya" className="w-8 h-8 rounded-full bg-slate-600"/>
+              <p className="text-gray-600 mb-6 italic">"Speed is everything. I can call 50 people in an hour using the Queue mode. The AI rewriting my WhatsApp messages makes me look super professional."</p>
+              <div className="flex gap-3 text-sm font-bold text-gray-800 items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs">PM</div>
                 Priya M., Financial Advisor, Mumbai
               </div>
             </div>
@@ -956,35 +1013,12 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* --- TESTIMONIALS --- */}
-      <section className="py-24 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-black mb-12 text-center text-gray-900">Trusted by 2,000+ Agents</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { name: "Rahul D.", role: "Solar Sales", text: "Finally, a CRM that doesn't feel like homework. It's fast." },
-              { name: "Sneha K.", role: "Freelancer", text: "The digital business card feature alone is worth it." },
-              { name: "Amit B.", role: "Car Dealer", text: "My team uses this daily. No more lost customer numbers." }
-            ].map((t, i) => (
-              <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex gap-1 text-orange-400 mb-3">
-                  <span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span><span className="fill-current">★</span>
-                </div>
-                <p className="text-gray-600 mb-4 text-sm font-medium">"{t.text}"</p>
-                <div className="font-bold text-gray-900 text-sm">{t.name}</div>
-                <div className="text-xs text-gray-400">{t.role}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* --- FAQ --- */}
-      <section className="py-24 bg-white border-t border-gray-100">
+      <section className="py-24 bg-gray-50 border-t border-gray-100">
         <div className="max-w-3xl mx-auto px-6">
-          <h2 className="text-3xl font-black mb-10 text-center">Frequently Asked Questions</h2>
+          <h2 className="text-3xl font-black mb-10 text-center text-gray-900">Frequently Asked Questions</h2>
           <div className="space-y-4">
-            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+            <details className="group bg-white p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors shadow-sm">
               <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
                 Is my client data safe?
                 <ChevronRight className="group-open:rotate-90 transition-transform"/>
@@ -994,7 +1028,7 @@ function LandingPage() {
               </p>
             </details>
 
-            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+            <details className="group bg-white p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors shadow-sm">
               <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
                 Do I need a laptop?
                 <ChevronRight className="group-open:rotate-90 transition-transform"/>
@@ -1004,7 +1038,7 @@ function LandingPage() {
               </p>
             </details>
 
-            <details className="group bg-gray-50 p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors">
+            <details className="group bg-white p-6 rounded-2xl cursor-pointer open:bg-blue-50 transition-colors shadow-sm">
               <summary className="font-bold text-lg flex justify-between items-center text-gray-800 list-none">
                 Does it work with WhatsApp?
                 <ChevronRight className="group-open:rotate-90 transition-transform"/>
