@@ -810,25 +810,124 @@ function AdminLogin({ onLogin }) {
 }
 
 function LandingPage() {
-    return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl mb-4 shadow-xl shadow-blue-200">T</div>
-            {/* Change strictly the color class */}
-            <h1 className="text-4xl font-black text-red-600 mb-2 tracking-tight">Thrivoy</h1>
-            <p className="text-gray-500 mb-8 max-w-xs mx-auto">The high-performance lead management engine for pros.</p>
-            <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-gray-100">
-                <p className="font-bold mb-4 text-gray-800">Have an invite key?</p>
-                <form onSubmit={e => { e.preventDefault(); const k = e.target.key.value; if(k) window.location.search = `?key=${k}`; }}>
-                   <input name="key" placeholder="Enter Client Key" className="w-full p-4 bg-gray-50 rounded-xl mb-4 text-center border outline-none focus:border-blue-500 transition-colors"/>
-                   <button className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Enter Engine</button>
-                </form>
-            </div>
-            <div className="mt-8 flex gap-4 text-gray-400">
-               <Globe size={20}/>
-               <ShieldCheck size={20}/>
-            </div>
+  // Logic to handle the Invite Key login
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const k = e.target.key.value;
+    if(k) window.location.search = `?key=${k}`;
+  };
+
+  return (
+    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100">
+      
+      {/* --- NAVBAR --- */}
+      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-black text-xl tracking-tight">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg">T</div>
+            Thrivoy
+          </div>
+          <a href="#login" className="text-sm font-bold text-gray-600 hover:text-blue-600 transition-colors">
+            Member Login
+          </a>
         </div>
-    );
+      </nav>
+
+      {/* --- HERO SECTION --- */}
+      <header className="relative pt-20 pb-32 overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-blue-50 rounded-full blur-3xl -z-10 opacity-60"></div>
+        
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <div className="inline-block mb-6 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider">
+            v2.0 Now Live
+          </div>
+          <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-gray-900 leading-[1.1]">
+            Close leads <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">faster</span>.<br/>
+            No spreadsheets attached.
+          </h1>
+          <p className="text-xl text-gray-500 mb-10 max-w-2xl mx-auto leading-relaxed">
+            The high-performance engine for pros. Capture leads instantly, 
+            organize with AI, and convert customers without the clutter.
+          </p>
+
+          {/* --- THE "GATEKEEPER" (Login Box) --- */}
+          <div id="login" className="bg-white p-2 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
+            <form onSubmit={handleLogin} className="flex gap-2">
+              <input 
+                name="key" 
+                placeholder="Enter your Invite Key" 
+                className="flex-1 bg-gray-50 text-gray-900 font-bold px-6 py-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:font-normal placeholder:text-gray-400"
+              />
+              <button className="bg-gray-900 hover:bg-black text-white px-8 py-4 rounded-xl font-bold transition-colors flex items-center gap-2">
+                Enter <ChevronRight size={18}/>
+              </button>
+            </form>
+          </div>
+          <p className="mt-4 text-xs text-gray-400 font-medium">
+            <Lock size={12} className="inline mb-0.5 mr-1"/> 
+            Secure Access • Invite Only
+          </p>
+        </div>
+      </header>
+
+      {/* --- FEATURES GRID --- */}
+      <section className="py-24 bg-gray-50 border-t border-gray-200">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-black mb-4">Why Top Producers Switch</h2>
+            <p className="text-gray-500">Stop fighting your CRM. Start fighting for revenue.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Feature 1 */}
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
+                <Wand2 size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-3">AI Import</h3>
+              <p className="text-gray-500 leading-relaxed">
+                Paste messy text from WhatsApp or Excel. Our AI extracts names and numbers instantly.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-6">
+                <Flame size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Hot Vault</h3>
+              <p className="text-gray-500 leading-relaxed">
+                Never lose a hot lead again. Isolate your best opportunities in a dedicated high-priority vault.
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mb-6">
+                <ScanLine size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Digital Business Card</h3>
+              <p className="text-gray-500 leading-relaxed">
+                Share your unique link. When they sign up, they drop directly into your calling queue.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- FOOTER --- */}
+      <footer className="py-12 bg-white border-t border-gray-200 text-center">
+        <div className="flex items-center justify-center gap-2 mb-4 text-gray-400">
+          <Globe size={16}/>
+          <span className="text-sm font-bold">Thrivoy Systems Inc.</span>
+        </div>
+        <p className="text-gray-400 text-sm">
+          &copy; {new Date().getFullYear()} All rights reserved. 
+        </p>
+      </footer>
+
+    </div>
+  );
 }
 
 const root = createRoot(document.getElementById('root'));
