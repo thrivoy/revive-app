@@ -19,7 +19,7 @@ import {
   List as ListIcon, Plus, X, Wand2, Info, Play, Mail, Clock, Flame, 
   ThumbsUp, Snowflake, ShieldCheck, Camera, Mic, LogOut, Save, 
   Share2, Users, RefreshCw, ChevronRight, Lock, Globe, Briefcase, HelpCircle,
-  LayoutDashboard, BarChart3, CheckCircle2, WifiOff
+  LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -215,10 +215,20 @@ function App() {
 
   if (!isOnline) return <div className="h-screen flex flex-col items-center justify-center p-6 text-center"><WifiOff size={48} className="text-gray-300 mb-4"/><h2 className="text-xl font-bold">Offline</h2><p className="text-gray-500">Check internet.</p></div>;
 
+  // --- GATEKEEPER LOGIC ---
+  // 1. Check Public Card first
   if (publicId) return <DigitalCard profileId={publicId} />;
+  
+  // 2. Check if logged out
   if (!clientId) return <LandingPage />;
-  if (clientId === ADMIN_KEY) return <AdminLogin onLogin={() => setView("admin")} />;
+
+  // 3. ✅ CHECK ADMIN DASHBOARD *BEFORE* LOGIN SCREEN
   if (view === "admin") return <AdminDashboard />;
+
+  // 4. Check if we need to login as Admin
+  if (clientId === ADMIN_KEY) return <AdminLogin onLogin={() => setView("admin")} />;
+  
+  // -------------------------
   
   // Main Views
   if(view === "menu") return <MenuScreen queue={queue} stats={stats} loading={loading} onViewChange={setView} onUpload={handleFileUpload} onRefresh={() => fetchQueue(clientId)} clientId={clientId} onBulkSubmit={handleBulkSubmit} />;
@@ -551,9 +561,9 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
                 signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, image: b64 })
                   .then(r => r.json())
                   .then(res => {
-                     setScanning(false);
-                     if(res.data) onScanComplete(res.data);
-                     else alert("Could not read card");
+                      setScanning(false);
+                      if(res.data) onScanComplete(res.data);
+                      else alert("Could not read card");
                   });
             };
             img.src = ev.target.result;
@@ -593,8 +603,20 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
         try {
             const res = await signedRequest("AI_PARSE_TEXT", { client_id: clientId, text });
             const json = await res.json();
-            if(json.data) setParsed(json.data);
-        } finally { setLoading(false); }
+            
+            // --- ALERT FIX ---
+            if(json.data && json.data.length > 0) {
+               setParsed(json.data);
+            } else {
+               alert("No leads found. Did you paste the right text? (Name + Phone)");
+            }
+            // -----------------
+
+        } catch(e) { 
+           alert("AI Error: " + e.message); 
+        } finally { 
+           setLoading(false); 
+        }
     };
 
     if(parsed.length > 0) return (
@@ -770,12 +792,52 @@ function DigitalCard({ profileId }) {
 }
 
 function AdminDashboard() {
+   // --- NEW: Client Generation Form ---
+   const [formData, setFormData] = useState({ name: '', phone: '', plan: 'Free' });
+   const [loading, setLoading] = useState(false);
+
+   const createClient = async () => {
+      if(!formData.name || !formData.phone) return alert("Enter Name and Phone");
+      setLoading(true);
+      try {
+         // Calling the backend to create a new client
+         const res = await signedRequest("ADD_CLIENT", { ...formData, admin_key: ADMIN_KEY });
+         const json = await res.json();
+         if(json.status === 'success') {
+            alert(`Client Created!\n\nKEY: ${json.data.key}\nURL: ${json.data.url}`);
+            setFormData({ name: '', phone: '', plan: 'Free' });
+         } else {
+            alert("Error: " + json.message);
+         }
+      } catch(e) { alert("Failed: " + e.message); }
+      finally { setLoading(false); }
+   };
+   // -----------------------------------
+
    return (
-      <div className="h-screen bg-slate-900 text-white p-6">
+      <div className="h-screen bg-slate-900 text-white p-6 overflow-y-auto">
          <div className="flex items-center gap-3 mb-8">
             <LayoutDashboard className="text-orange-500"/>
             <h1 className="text-2xl font-bold">Master View</h1>
          </div>
+         
+         {/* --- NEW: Create Client Section --- */}
+         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8">
+            <h3 className="font-bold mb-4 flex items-center gap-2"><UserCheck size={20} className="text-blue-400"/> Create New Client</h3>
+            <div className="space-y-3">
+               <input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} placeholder="Client Name" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none"/>
+               <input value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} placeholder="Phone Number" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none"/>
+               <select value={formData.plan} onChange={e=>setFormData({...formData, plan: e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none text-gray-400">
+                  <option value="Free">Free Plan</option>
+                  <option value="Pro">Pro Plan</option>
+               </select>
+               <button onClick={createClient} disabled={loading} className="w-full bg-blue-600 py-3 rounded-lg font-bold hover:bg-blue-500 transition-colors disabled:opacity-50">
+                  {loading ? "Generating..." : "Generate Key"}
+               </button>
+            </div>
+         </div>
+         {/* ---------------------------------- */}
+
          <div className="grid grid-cols-2 gap-4">
             <div className="bg-slate-800 p-4 rounded-xl">
                <p className="text-gray-400 text-xs">Total Clients</p>
@@ -802,11 +864,10 @@ function AdminLogin({ onLogin }) {
 
   const handleSubmit = (e) => {
     e.preventDefault(); // Prevents page reload
-    // Check password (trim removes accidental spaces)
     if (pw.trim() === ADMIN_PASSWORD) {
       onLogin();
     } else {
-      alert("Access Denied. Check capitalization.");
+      alert(`Access Denied. You typed: '${pw}'`);
     }
   };
 
@@ -815,7 +876,6 @@ function AdminLogin({ onLogin }) {
       <Lock size={48} className="mb-6 text-orange-500" />
       <h2 className="text-xl font-bold mb-6">Thrivoy Admin</h2>
       
-      {/* Wrapped in form to enable "Enter" key submission */}
       <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
         <input
           type="password"
@@ -825,7 +885,7 @@ function AdminLogin({ onLogin }) {
           placeholder="ENTER CODE"
           autoFocus
         />
-        <button className="w-full py-4 bg-orange-600 rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20">
+        <button type="submit" className="w-full py-4 bg-orange-600 rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20 active:scale-95">
           UNLOCK
         </button>
       </form>
@@ -841,7 +901,13 @@ function LandingPage() {
   };
 
   const scrollToLogin = () => {
-    document.getElementById('login-form').scrollIntoView({ behavior: 'smooth' });
+    // --- SCROLL FIX: Added offset so it doesn't hide under header ---
+    const el = document.getElementById('login-form');
+    if(el) {
+       // Manual scroll with offset calculation
+       const y = el.getBoundingClientRect().top + window.pageYOffset - 150;
+       window.scrollTo({top: y, behavior: 'smooth'});
+    }
   };
 
   return (
@@ -884,7 +950,8 @@ function LandingPage() {
           </p>
 
           {/* --- LOGIN BOX (THE GATEKEEPER) --- */}
-          <div id="login-form" className="bg-white p-3 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
+          {/* Added scroll-mt class for Tailwind offset support */}
+          <div id="login-form" className="scroll-mt-32 bg-white p-3 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
             <form onSubmit={handleLogin} className="flex gap-2">
               <input 
                 name="key" 
