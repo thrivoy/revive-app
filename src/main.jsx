@@ -22,6 +22,53 @@ import {
   LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck
 } from 'lucide-react';
 
+// --- MEMORY LEAK FIX: Cache Cleaner ---
+// Runs every 60s to clear stale cache entries older than 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of requestCache.entries()) {
+    if (now - val.timestamp > 300000) { 
+        requestCache.delete(key);
+    }
+  }
+}, 60000);
+
+// --- STABILITY FIX: Error Boundary ---
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
+          <div className="bg-red-100 p-4 rounded-full text-red-600 mb-4"><WifiOff size={32}/></div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Engine Stalled</h1>
+          <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">Something went wrong. Don't worry, your data is safe in the cloud.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+          >
+            Restart Engine
+          </button>
+          <p className="mt-4 text-xs text-gray-400 font-mono">{this.state.error?.message}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // --- CONFIGURATION ---
 // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT URL HERE
 const API_URL = "https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6i_sxGe5owO_tPAsN6_eABKDJw/exec"; 
@@ -695,38 +742,51 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
        signedRequest("UPDATE_PROFILE", { client_id: clientId, title, photo }).then(() => alert("Profile Saved"));
     };
 
+    // Safe Logout Handler
+    const handleLogout = () => {
+        if (confirm("Are you sure you want to log out? Any unsaved changes in forms will be lost.")) {
+            onLogout();
+        }
+    };
+
     return (
         <div className="p-6 bg-white h-screen overflow-y-auto">
+           {/* Header with Back and Safe Logout */}
            <div className="flex justify-between items-center mb-6">
-              <button onClick={onBack}><ArrowLeft/></button>
-              <button onClick={onLogout} className="text-red-500 font-bold flex items-center gap-1"><LogOut size={16}/> Logout</button>
+              <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ArrowLeft/></button>
+              <button onClick={handleLogout} className="text-red-500 font-bold flex items-center gap-1 hover:bg-red-50 px-3 py-1 rounded-lg transition-colors">
+                  <LogOut size={16}/> Logout
+              </button>
            </div>
            
            <h1 className="text-2xl font-bold mb-6">Settings</h1>
            
+           {/* Profile Section */}
            <div className="mb-8 p-4 border rounded-xl bg-gray-50">
               <h3 className="font-bold mb-4 flex items-center gap-2"><Briefcase size={16} className="text-blue-600"/> Digital Card Profile</h3>
-              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Your Job Title" className="w-full p-2 mb-2 rounded border text-sm"/>
-              <input value={photo} onChange={e=>setPhoto(e.target.value)} placeholder="Photo URL" className="w-full p-2 mb-2 rounded border text-sm"/>
-              <button onClick={saveProfile} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold w-full">Save Profile</button>
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Your Job Title" className="w-full p-2 mb-2 rounded border text-sm focus:border-blue-500 outline-none"/>
+              <input value={photo} onChange={e=>setPhoto(e.target.value)} placeholder="Photo URL" className="w-full p-2 mb-2 rounded border text-sm focus:border-blue-500 outline-none"/>
+              <button onClick={saveProfile} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold w-full hover:bg-blue-700 transition-colors">Save Profile</button>
            </div>
 
+           {/* Template Editor */}
            <div className="mb-8">
               <h3 className="font-bold mb-2">Default Message Template</h3>
-              <textarea value={template} onChange={e => setTemplate(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl mb-2 text-sm border outline-none"/>
+              <textarea value={template} onChange={e => setTemplate(e.target.value)} className="w-full h-24 p-4 bg-gray-50 rounded-xl mb-2 text-sm border outline-none focus:border-blue-500 transition-colors"/>
            </div>
 
+           {/* Template Library */}
            <div>
               <h3 className="font-bold mb-2">Template Library</h3>
               <div className="flex gap-2 mb-4">
-                 <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 bg-gray-50 rounded-lg border"/>
-                 <button onClick={() => { if(newName) { setLibrary([...library, {name: newName, text: template}]); setNewName(""); }}} className="bg-green-500 text-white p-2 rounded-lg"><Plus/></button>
+                 <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New Template Name" className="flex-1 p-2 bg-gray-50 rounded-lg border focus:border-blue-500 outline-none"/>
+                 <button onClick={() => { if(newName) { setLibrary([...library, {name: newName, text: template}]); setNewName(""); }}} className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition-colors"><Plus/></button>
               </div>
               <div className="space-y-2">
                  {library.map((l, i) => (
                     <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
                        <span className="font-bold text-sm text-gray-700">{l.name}</span>
-                       <button onClick={() => setLibrary(library.filter((_, idx) => idx !== i))} className="text-red-400"><Trash2 size={16}/></button>
+                       <button onClick={() => setLibrary(library.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
                     </div>
                  ))}
               </div>
@@ -795,24 +855,36 @@ function AdminDashboard() {
    // --- NEW: Client Generation Form ---
    const [formData, setFormData] = useState({ name: '', phone: '', plan: 'Free' });
    const [loading, setLoading] = useState(false);
+   
+   // --- NEW: Real Stats State ---
+   const [stats, setStats] = useState({ clients: 0, leads: 0, hits: 0 });
+
+   // Fetch Real Stats on Mount
+   useEffect(() => {
+      signedRequest("GET_ADMIN_STATS", { admin_key: ADMIN_KEY, client_id: ADMIN_KEY })
+        .then(r => r.json())
+        .then(json => {
+           if(json.status === 'success') setStats(json.data);
+        });
+   }, []);
 
    const createClient = async () => {
       if(!formData.name || !formData.phone) return alert("Enter Name and Phone");
       setLoading(true);
       try {
-         // Calling the backend to create a new client
-         const res = await signedRequest("ADD_CLIENT", { ...formData, admin_key: ADMIN_KEY });
+         const res = await signedRequest("ADD_CLIENT", { ...formData, admin_key: ADMIN_KEY, client_id: ADMIN_KEY });
          const json = await res.json();
          if(json.status === 'success') {
             alert(`Client Created!\n\nKEY: ${json.data.key}\nURL: ${json.data.url}`);
             setFormData({ name: '', phone: '', plan: 'Free' });
+            // Refresh stats
+            setStats(prev => ({ ...prev, clients: prev.clients + 1 }));
          } else {
             alert("Error: " + json.message);
          }
       } catch(e) { alert("Failed: " + e.message); }
       finally { setLoading(false); }
    };
-   // -----------------------------------
 
    return (
       <div className="h-screen bg-slate-900 text-white p-6 overflow-y-auto">
@@ -821,38 +893,41 @@ function AdminDashboard() {
             <h1 className="text-2xl font-bold">Master View</h1>
          </div>
          
-         {/* --- NEW: Create Client Section --- */}
-         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8">
-            <h3 className="font-bold mb-4 flex items-center gap-2"><UserCheck size={20} className="text-blue-400"/> Create New Client</h3>
+         {/* Stats Grid */}
+         <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+               <p className="text-gray-400 text-xs uppercase tracking-wider">Total Clients</p>
+               <p className="text-3xl font-black mt-1 text-white">{stats.clients}</p>
+            </div>
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+               <p className="text-gray-400 text-xs uppercase tracking-wider">Total Leads</p>
+               <p className="text-3xl font-black mt-1 text-blue-400">{stats.leads}</p>
+            </div>
+         </div>
+
+         {/* Create Client Section */}
+         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8 shadow-xl">
+            <h3 className="font-bold mb-4 flex items-center gap-2"><UserCheck size={20} className="text-green-400"/> Create New Client</h3>
             <div className="space-y-3">
-               <input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} placeholder="Client Name" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none"/>
-               <input value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} placeholder="Phone Number" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none"/>
-               <select value={formData.plan} onChange={e=>setFormData({...formData, plan: e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 outline-none text-gray-400">
+               <input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} placeholder="Client Name" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-600 outline-none focus:border-green-500 transition-colors"/>
+               <input value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} placeholder="Phone Number" className="w-full p-3 rounded-lg bg-slate-900 border border-slate-600 outline-none focus:border-green-500 transition-colors"/>
+               <select value={formData.plan} onChange={e=>setFormData({...formData, plan: e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 border border-slate-600 outline-none text-gray-300">
                   <option value="Free">Free Plan</option>
                   <option value="Pro">Pro Plan</option>
                </select>
-               <button onClick={createClient} disabled={loading} className="w-full bg-blue-600 py-3 rounded-lg font-bold hover:bg-blue-500 transition-colors disabled:opacity-50">
-                  {loading ? "Generating..." : "Generate Key"}
+               <button onClick={createClient} disabled={loading} className="w-full bg-green-600 py-3 rounded-lg font-bold hover:bg-green-500 transition-colors disabled:opacity-50 text-white shadow-lg shadow-green-900/20">
+                  {loading ? "Generating Keys..." : "Generate Access Key"}
                </button>
             </div>
          </div>
-         {/* ---------------------------------- */}
 
-         <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-800 p-4 rounded-xl">
-               <p className="text-gray-400 text-xs">Total Clients</p>
-               <p className="text-2xl font-bold">12</p>
-            </div>
-            <div className="bg-slate-800 p-4 rounded-xl">
-               <p className="text-gray-400 text-xs">Leads Processed</p>
-               <p className="text-2xl font-bold">1,240</p>
-            </div>
-         </div>
-         <div className="mt-8 p-4 bg-slate-800 rounded-xl border border-slate-700">
-            <h3 className="font-bold mb-4 flex items-center gap-2"><BarChart3 size={16}/> System Health</h3>
-            <div className="space-y-2 text-sm text-gray-400">
-               <div className="flex justify-between"><span>API Latency</span> <span className="text-green-400">45ms</span></div>
-               <div className="flex justify-between"><span>Error Rate</span> <span className="text-green-400">0.01%</span></div>
+         {/* System Health */}
+         <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+            <h3 className="font-bold mb-4 flex items-center gap-2 text-gray-300"><BarChart3 size={16}/> System Health</h3>
+            <div className="space-y-3 text-sm text-gray-400">
+               <div className="flex justify-between border-b border-slate-700 pb-2"><span>API Hits (10m)</span> <span className="text-white font-mono">{stats.hits}</span></div>
+               <div className="flex justify-between border-b border-slate-700 pb-2"><span>Status</span> <span className="text-green-400 font-bold">OPERATIONAL</span></div>
+               <div className="flex justify-between"><span>Version</span> <span className="text-gray-500">v22.1.0</span></div>
             </div>
          </div>
       </div>
@@ -1157,5 +1232,51 @@ function LandingPage() {
   );
 }
 
+// --- ERROR BOUNDARY & STARTUP (Paste this at the very bottom) ---
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
+          <div className="bg-red-100 p-4 rounded-full text-red-600 mb-4">
+             {/* Simple icon or text if Lucide isn't available in scope here */}
+             ⚠️
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Engine Stalled</h1>
+          <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
+            Something went wrong. Don't worry, your data is safe in the cloud.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+          >
+            Restart Engine
+          </button>
+          <p className="mt-4 text-xs text-gray-400 font-mono">{this.state.error?.message}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const root = createRoot(document.getElementById('root'));
-root.render(<App />);
+root.render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
