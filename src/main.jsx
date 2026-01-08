@@ -3,8 +3,6 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { createRoot } from 'react-dom/client';
 
 // --- SAFE IMPORT FIX ---
-// 1. Import * captures the module regardless of format (ESM/CJS)
-// 2. We check for the export directly, OR safely check .default
 import * as ReactWindowPkg from 'react-window';
 const List = ReactWindowPkg.FixedSizeList || ReactWindowPkg.default?.FixedSizeList;
 
@@ -16,14 +14,13 @@ import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import { 
   Phone, Upload, UserPlus, ArrowLeft, Trash2, Zap, ScanLine, Settings, 
-  List as ListIcon, Plus, X, Wand2, Info, Play, Mail, Clock, Flame, 
-  ThumbsUp, Snowflake, ShieldCheck, Camera, Mic, LogOut, Save, 
-  Share2, Users, RefreshCw, ChevronRight, Lock, Globe, Briefcase, HelpCircle,
+  List as ListIcon, Plus, X, Wand2, Play, Flame, 
+  ThumbsUp, Snowflake, Camera, Mic, LogOut, 
+  Share2, Users, RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle,
   LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck
 } from 'lucide-react';
 
 // --- MEMORY LEAK FIX: Cache Cleaner ---
-// Runs every 60s to clear stale cache entries older than 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of requestCache.entries()) {
@@ -33,7 +30,7 @@ setInterval(() => {
   }
 }, 60000);
 
-// --- STABILITY FIX: Error Boundary ---
+// --- STABILITY FIX: Error Boundary (Definitive Version) ---
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -93,10 +90,10 @@ const pendingRequests = new Map();
 
 async function signedRequest(action, payload) {
   const cacheKey = JSON.stringify({ action, payload });
-  
+   
   // 1. Deduplication
   if (pendingRequests.has(cacheKey)) return pendingRequests.get(cacheKey);
-  
+   
   // 2. Cache Read (5s TTL, except for mutations)
   if (requestCache.has(cacheKey)) {
     const cached = requestCache.get(cacheKey);
@@ -179,12 +176,12 @@ function App() {
   const [stats, setStats] = useState({ today: 0 });
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  
+   
   // Navigation State
   const [activeLead, setActiveLead] = useState(null);
   const [prefillData, setPrefillData] = useState(null);
   const [bulkData, setBulkData] = useState([]);
-  
+   
   // Settings
   const [template, setTemplate] = useState(() => safeStorage.getItem("active_template") || "Hi {{name}}, regarding {{context}}.");
   const [library, setLibrary] = useState(() => JSON.parse(safeStorage.getItem("msg_library") || "[]"));
@@ -192,7 +189,7 @@ function App() {
 
   useEffect(() => safeStorage.setItem("active_template", template), [template]);
   useEffect(() => safeStorage.setItem("msg_library", JSON.stringify(library)), [library]);
-  
+   
   // Offline Listener
   useEffect(() => {
      const up = () => setIsOnline(true);
@@ -265,7 +262,7 @@ function App() {
   // --- GATEKEEPER LOGIC ---
   // 1. Check Public Card first
   if (publicId) return <DigitalCard profileId={publicId} />;
-  
+   
   // 2. Check if logged out
   if (!clientId) return <LandingPage />;
 
@@ -274,9 +271,9 @@ function App() {
 
   // 4. Check if we need to login as Admin
   if (clientId === ADMIN_KEY) return <AdminLogin onLogin={() => setView("admin")} />;
-  
+   
   // -------------------------
-  
+   
   // Main Views
   if(view === "menu") return <MenuScreen queue={queue} stats={stats} loading={loading} onViewChange={setView} onUpload={handleFileUpload} onRefresh={() => fetchQueue(clientId)} clientId={clientId} onBulkSubmit={handleBulkSubmit} />;
   if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} clientId={clientId} onBack={() => { fetchQueue(clientId); setView("menu"); }} initialLead={activeLead} />;
@@ -332,7 +329,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
            <button onClick={() => onViewChange("settings")} className="p-2 rounded-full bg-gray-100"><Settings size={20}/></button>
          </div>
       </header>
-      
+       
       <main className="p-4 space-y-4 animate-in fade-in">
          {/* Stats */}
          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-xl shadow-blue-200 flex justify-between items-center relative overflow-hidden">
@@ -507,7 +504,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
      const json = await res.json();
      if(json.data) setMsg(json.data);
   };
-  
+   
   // CALENDAR SNOOZE
   const handleSnooze = (days) => {
      vibrate();
@@ -604,7 +601,7 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
                 cvs.width = 800; cvs.height = img.height * scale;
                 cvs.getContext('2d').drawImage(img, 0, 0, cvs.width, cvs.height);
                 const b64 = cvs.toDataURL('image/jpeg', 0.7).split(',')[1];
-                
+                 
                 signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, image: b64 })
                   .then(r => r.json())
                   .then(res => {
@@ -650,15 +647,12 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
         try {
             const res = await signedRequest("AI_PARSE_TEXT", { client_id: clientId, text });
             const json = await res.json();
-            
-            // --- ALERT FIX ---
+             
             if(json.data && json.data.length > 0) {
                setParsed(json.data);
             } else {
                alert("No leads found. Did you paste the right text? (Name + Phone)");
             }
-            // -----------------
-
         } catch(e) { 
            alert("AI Error: " + e.message); 
         } finally { 
@@ -705,7 +699,7 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
 function ManualForm({ prefill, onBack, onSubmit }) {
     const [form, setForm] = useState(prefill || { name: '', phone: '', context: '' });
     const [listening, setListening] = useState(false);
-    
+     
     // VOICE INPUT
     const toggleMic = () => {
         if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported");
@@ -812,7 +806,7 @@ function HelpScreen({ onBack }) {
 function DigitalCard({ profileId }) {
     const [profile, setProfile] = useState(null);
     const [sent, setSent] = useState(false);
-    
+     
     useEffect(() => {
        signedRequest("GET_CLIENT_PROFILE", { client_id: profileId })
          .then(r => r.json())
@@ -1230,48 +1224,6 @@ function LandingPage() {
 
     </div>
   );
-}
-
-// --- ERROR BOUNDARY & STARTUP (Paste this at the very bottom) ---
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
-          <div className="bg-red-100 p-4 rounded-full text-red-600 mb-4">
-             {/* Simple icon or text if Lucide isn't available in scope here */}
-             ⚠️
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Engine Stalled</h1>
-          <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-            Something went wrong. Don't worry, your data is safe in the cloud.
-          </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
-          >
-            Restart Engine
-          </button>
-          <p className="mt-4 text-xs text-gray-400 font-mono">{this.state.error?.message}</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }
 
 const root = createRoot(document.getElementById('root'));
