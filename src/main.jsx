@@ -17,10 +17,11 @@ import {
   List as ListIcon, Plus, X, Wand2, Play, Flame, 
   ThumbsUp, Snowflake, Camera, Mic, LogOut, 
   Share2, Users, RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle,
-  LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck
+  LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck, Mail, Globe, Building2
 } from 'lucide-react';
 
-// --- MEMORY LEAK FIX: Cache Cleaner ---
+// --- MEMORY LEAK FIX ---
+const requestCache = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [key, val] of requestCache.entries()) {
@@ -30,7 +31,7 @@ setInterval(() => {
   }
 }, 60000);
 
-// --- STABILITY FIX: Error Boundary (Definitive Version) ---
+// --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -83,9 +84,6 @@ const safeStorage = {
 };
 
 const vibrate = (ms = 50) => { if (navigator.vibrate) navigator.vibrate(ms); };
-
-// Request Cache for Deduplication
-const requestCache = new Map();
 const pendingRequests = new Map();
 
 async function signedRequest(action, payload) {
@@ -150,8 +148,10 @@ const QueueRow = ({ index, style, data }) => {
       <div onClick={() => onSelect(lead)} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center active:bg-blue-50 transition-colors cursor-pointer">
         <div className="flex-1 min-w-0 pr-2">
            <div className="font-bold text-gray-800 truncate">{lead.name}</div>
-           <div className="text-xs text-gray-500 font-mono">{lead.phone}</div>
-           {lead.context && <div className="text-[10px] text-blue-600 mt-1 truncate bg-blue-50 inline-block px-1 rounded">{lead.context}</div>}
+           <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+              <span>{lead.phone}</span>
+              {lead.company && <span className="bg-gray-100 px-1 rounded text-[10px] truncate max-w-[80px]">{lead.company}</span>}
+           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${lead.status === 'SENT' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{lead.status}</span>
@@ -250,7 +250,9 @@ function App() {
            name: r.Name || "Lead",
            phone: r.Phone || r.Mobile,
            context: r.Context || r.Notes || "Imported",
-           email: r.Email || ""
+           email: r.Email || "",
+           company: r.Company || "",
+           website: r.Website || ""
         }));
         setBulkData(valid);
         setView("bulk");
@@ -260,21 +262,12 @@ function App() {
   if (!isOnline) return <div className="h-screen flex flex-col items-center justify-center p-6 text-center"><WifiOff size={48} className="text-gray-300 mb-4"/><h2 className="text-xl font-bold">Offline</h2><p className="text-gray-500">Check internet.</p></div>;
 
   // --- GATEKEEPER LOGIC ---
-  // 1. Check Public Card first
   if (publicId) return <DigitalCard profileId={publicId} />;
-   
-  // 2. Check if logged out
   if (!clientId) return <LandingPage />;
-
-  // 3. ✅ CHECK ADMIN DASHBOARD *BEFORE* LOGIN SCREEN
   if (view === "admin") return <AdminDashboard />;
-
-  // 4. Check if we need to login as Admin
   if (clientId === ADMIN_KEY) return <AdminLogin onLogin={() => setView("admin")} />;
    
-  // -------------------------
-   
-  // Main Views
+  // --- VIEWS ---
   if(view === "menu") return <MenuScreen queue={queue} stats={stats} loading={loading} onViewChange={setView} onUpload={handleFileUpload} onRefresh={() => fetchQueue(clientId)} clientId={clientId} onBulkSubmit={handleBulkSubmit} />;
   if(view === "stack") return <CardStack queue={queue} setQueue={setQueue} template={template} library={library} clientId={clientId} onBack={() => { fetchQueue(clientId); setView("menu"); }} initialLead={activeLead} />;
   if(view === "list") return <QueueList queue={queue} onBack={() => setView("menu")} onSelect={(lead) => { setActiveLead(lead); setView("stack"); }} />;
@@ -297,16 +290,16 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
       else alert("Link copied: " + url);
   };
 
-  // NATIVE CONTACT PICKER
   const importContacts = async () => {
     if ('contacts' in navigator && 'ContactsManager' in window) {
        try {
-          const props = ['name', 'tel'];
+          const props = ['name', 'tel', 'email'];
           const contacts = await navigator.contacts.select(props, { multiple: true });
           if (contacts.length > 0) {
              const formatted = contacts.map(c => ({
                name: c.name[0],
                phone: c.tel[0],
+               email: c.email?.[0] || "",
                context: "Imported from Phonebook"
              }));
              onBulkSubmit(formatted);
@@ -372,7 +365,6 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
             </button>
          </div>
          
-         {/* Native Contacts */}
          {('contacts' in navigator) && (
             <button onClick={importContacts} className="w-full bg-indigo-50 text-indigo-700 p-3 rounded-xl border border-indigo-100 font-bold flex items-center justify-center gap-2">
                <Users size={20}/> Import from Contacts
@@ -485,17 +477,24 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     next();
   };
 
-  // NATIVE SHARE
   const handleAction = async (type) => {
     vibrate();
     if(type === 'call') window.location.href = `tel:${active.phone}`;
+    else if(type === 'email') {
+        // NATIVE EMAIL SUITE
+        const subject = encodeURIComponent(`Regarding: ${active.context || "Our Discussion"}`);
+        const body = encodeURIComponent(msg);
+        window.location.href = `mailto:${active.email}?subject=${subject}&body=${body}`;
+        // Optional: Auto-log email as action? Let's leave user to dispose manually for now.
+        submitAction("Emailed");
+    }
     else if(type === 'share') {
-       if(navigator.share) await navigator.share({ title: 'Message', text: msg });
+       if(navigator.share) await navigator.share({ title: 'Lead', text: `${active.name} ${active.phone}` });
        else alert("Share not supported");
     } else {
        window.open(`https://wa.me/${active.phone}?text=${encodeURIComponent(msg)}`);
     }
-    setMode("disposition");
+    if (type !== 'email') setMode("disposition");
   };
 
   const handleRewrite = async (tone) => {
@@ -505,7 +504,6 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
      if(json.data) setMsg(json.data);
   };
    
-  // CALENDAR SNOOZE
   const handleSnooze = (days) => {
      vibrate();
      const d = new Date(); d.setDate(d.getDate() + days);
@@ -541,7 +539,11 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
                  <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
                     <h2 className="text-2xl font-bold truncate text-gray-800">{active.name}</h2>
                     <p className="text-blue-600 font-mono font-medium">{active.phone}</p>
-                    {active.context && <div className="mt-2 text-[10px] bg-white text-gray-600 inline-block px-2 py-1 rounded border border-gray-200">{active.context}</div>}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {active.company && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Building2 size={10}/> {active.company}</span>}
+                        {active.email && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Mail size={10}/> {active.email}</span>}
+                        {active.website && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Globe size={10}/> {active.website}</span>}
+                    </div>
                  </div>
                  
                  <div className="p-4 flex-1 bg-white flex flex-col relative">
@@ -552,10 +554,15 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
                     <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full flex-1 bg-gray-50 p-4 rounded-xl outline-none resize-none text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 transition-all"/>
                  </div>
                  
-                 <div className="p-4 grid grid-cols-3 gap-2 bg-white border-t">
-                    <button onClick={() => handleAction('call')} className="bg-gray-900 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Phone size={20}/><span className="text-[10px]">Call</span></button>
-                    <button onClick={() => handleAction('wa')} className="bg-green-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Zap size={20}/><span className="text-[10px]">WhatsApp</span></button>
-                    <button onClick={() => handleAction('share')} className="bg-pink-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Share2 size={20}/><span className="text-[10px]">Share</span></button>
+                 <div className="p-4 grid grid-cols-4 gap-2 bg-white border-t">
+                    <button onClick={() => handleAction('call')} className="bg-gray-900 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Phone size={20}/><span className="text-[8px]">Call</span></button>
+                    <button onClick={() => handleAction('wa')} className="bg-green-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Zap size={20}/><span className="text-[8px]">WA</span></button>
+                    {active.email ? (
+                        <button onClick={() => handleAction('email')} className="bg-blue-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Mail size={20}/><span className="text-[8px]">Mail</span></button>
+                    ) : (
+                        <button disabled className="bg-gray-200 text-gray-400 p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Mail size={20}/><span className="text-[8px]">No Mail</span></button>
+                    )}
+                    <button onClick={() => handleAction('share')} className="bg-pink-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Share2 size={20}/><span className="text-[8px]">Share</span></button>
                  </div>
                  <div className="px-4 pb-4 flex gap-2">
                      <button onClick={() => setMode("snooze")} className="flex-1 bg-gray-100 text-gray-500 py-3 rounded-xl font-bold text-xs">Snooze</button>
@@ -586,12 +593,12 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
 
 function CameraScan({ onBack, onScanComplete, clientId }) {
     const fileInput = useRef(null);
+    const [images, setImages] = useState([]);
     const [scanning, setScanning] = useState(false);
 
     const handleFile = (e) => {
         const file = e.target.files[0];
         if(!file) return;
-        setScanning(true);
         const reader = new FileReader();
         reader.onload = (ev) => {
             const img = new Image();
@@ -601,18 +608,22 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
                 cvs.width = 800; cvs.height = img.height * scale;
                 cvs.getContext('2d').drawImage(img, 0, 0, cvs.width, cvs.height);
                 const b64 = cvs.toDataURL('image/jpeg', 0.7).split(',')[1];
-                 
-                signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, image: b64 })
-                  .then(r => r.json())
-                  .then(res => {
-                      setScanning(false);
-                      if(res.data) onScanComplete(res.data);
-                      else alert("Could not read card");
-                  });
+                setImages(prev => [...prev, b64]);
             };
             img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
+    };
+
+    const processImages = () => {
+        setScanning(true);
+        signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, images })
+          .then(r => r.json())
+          .then(res => {
+              setScanning(false);
+              if(res.data) onScanComplete(res.data);
+              else alert("Could not read card");
+          });
     };
 
     return (
@@ -620,16 +631,28 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
            {scanning ? (
               <div className="flex flex-col items-center animate-in fade-in">
                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mb-4"></div>
-                 <p className="font-bold">AI Analyzing...</p>
+                 <p className="font-bold">AI Analyzing {images.length} Image(s)...</p>
               </div>
            ) : (
               <>
                 <Camera size={64} className="mb-6 text-orange-500"/>
                 <h2 className="text-2xl font-bold mb-2">Scan Business Card</h2>
-                <p className="text-gray-400 mb-8">AI will extract Name, Phone, and Role.</p>
-                <button onClick={() => fileInput.current.click()} className="w-full bg-orange-600 py-4 rounded-xl font-bold text-lg hover:bg-orange-700 transition-colors">Open Camera</button>
+                <div className="flex gap-2 mb-8">
+                   <div className={`w-3 h-3 rounded-full ${images.length >= 1 ? 'bg-green-500' : 'bg-gray-700'}`}></div>
+                   <div className={`w-3 h-3 rounded-full ${images.length >= 2 ? 'bg-green-500' : 'bg-gray-700'}`}></div>
+                </div>
+                
+                {images.length === 0 && <button onClick={() => fileInput.current.click()} className="w-full bg-orange-600 py-4 rounded-xl font-bold text-lg hover:bg-orange-700 transition-colors">Capture Front</button>}
+                {images.length === 1 && (
+                    <div className="space-y-3 w-full">
+                        <button onClick={() => fileInput.current.click()} className="w-full bg-gray-800 border border-gray-600 py-4 rounded-xl font-bold text-lg hover:bg-gray-700 transition-colors">Capture Back (Optional)</button>
+                        <button onClick={processImages} className="w-full bg-green-600 py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition-colors">Analyze Card</button>
+                    </div>
+                )}
+                {images.length === 2 && <button onClick={processImages} className="w-full bg-green-600 py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition-colors">Analyze Both Sides</button>}
+                
                 <button onClick={onBack} className="mt-6 font-bold text-gray-500">Cancel</button>
-                <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile}/>
+                <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} value=""/>
               </>
            )}
         </div>
@@ -647,7 +670,7 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
         try {
             const res = await signedRequest("AI_PARSE_TEXT", { client_id: clientId, text });
             const json = await res.json();
-             
+            
             if(json.data && json.data.length > 0) {
                setParsed(json.data);
             } else {
@@ -668,12 +691,14 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
            </div>
            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {parsed.map((l, i) => (
-                 <div key={i} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                 <div key={i} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
                     <input value={l.name} onChange={e => {const n=[...parsed];n[i].name=e.target.value;setParsed(n)}} className="font-bold w-full outline-none text-gray-800 border-b border-transparent focus:border-blue-500"/>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2">
                        <span className="text-gray-400 text-xs">+91</span>
                        <input value={l.phone} onChange={e => {const n=[...parsed];n[i].phone=e.target.value;setParsed(n)}} className="text-sm font-mono w-full outline-none text-gray-600"/>
                     </div>
+                    <input value={l.email} placeholder="Email" onChange={e => {const n=[...parsed];n[i].email=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
+                    <input value={l.company} placeholder="Company" onChange={e => {const n=[...parsed];n[i].company=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
                  </div>
               ))}
            </div>
@@ -697,7 +722,7 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
 }
 
 function ManualForm({ prefill, onBack, onSubmit }) {
-    const [form, setForm] = useState(prefill || { name: '', phone: '', context: '' });
+    const [form, setForm] = useState(prefill || { name: '', phone: '', email: '', company: '', website: '', context: '' });
     const [listening, setListening] = useState(false);
      
     // VOICE INPUT
@@ -711,12 +736,21 @@ function ManualForm({ prefill, onBack, onSubmit }) {
     };
 
     return (
-        <div className="p-6 bg-white h-screen">
+        <div className="p-6 bg-white h-screen overflow-y-auto">
            <button onClick={onBack} className="mb-6 text-gray-500"><ArrowLeft/></button>
            <h1 className="text-2xl font-bold mb-6 text-gray-800">Add Lead</h1>
            <div className="space-y-4">
               <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} placeholder="Name" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
               <input value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} placeholder="Phone (e.g. 9876543210)" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+              
+              {/* NEW FIELDS: Email & Company */}
+              <div className="grid grid-cols-2 gap-2">
+                 <input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} placeholder="Email" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+                 <input value={form.company} onChange={e=>setForm({...form, company: e.target.value})} placeholder="Company" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+              </div>
+              
+              <input value={form.website} onChange={e=>setForm({...form, website: e.target.value})} placeholder="Website" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+              
               <div className="relative">
                  <input value={form.context} onChange={e=>setForm({...form, context: e.target.value})} placeholder="Notes / Context" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
                  <button onClick={toggleMic} className={`absolute right-2 top-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button>
