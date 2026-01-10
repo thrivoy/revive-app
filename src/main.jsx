@@ -281,163 +281,124 @@ function App() {
   return <div className="p-10 text-center animate-pulse">Loading Engine...</div>;
 }
 
-// --- SUB SCREENS ---
+// --- NEW COMPONENT: Power Emailer (Rapid Fire) ---
+function PowerEmailer({ queue, selectedIds, template, onBack }) {
+    // Filter queue to show ONLY selected leads
+    const campaignList = useMemo(() => queue.filter(l => selectedIds.has(l.lead_id) && l.email), [queue, selectedIds]);
+    const [index, setIndex] = useState(0);
+    const lead = campaignList[index];
+    const [msg, setMsg] = useState("");
 
-function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, clientId, onBulkSubmit }) {
-  const shareCard = () => {
-      const url = `${window.location.origin}?u=${clientId}`;
-      if(navigator.share) navigator.share({ title: 'My Digital Card', url });
-      else alert("Link copied: " + url);
-  };
+    useEffect(() => {
+        if(lead) {
+            setMsg(template.replace("{{name}}", lead.name).replace("{{context}}", lead.context || ""));
+        }
+    }, [lead, template]);
 
-  const importContacts = async () => {
-    if ('contacts' in navigator && 'ContactsManager' in window) {
-       try {
-          const props = ['name', 'tel', 'email'];
-          const contacts = await navigator.contacts.select(props, { multiple: true });
-          if (contacts.length > 0) {
-             const formatted = contacts.map(c => ({
-               name: c.name[0],
-               phone: c.tel[0],
-               email: c.email?.[0] || "",
-               context: "Imported from Phonebook"
-             }));
-             onBulkSubmit(formatted);
-          }
-       } catch (ex) { console.log(ex); }
-    } else {
-       alert("Use 'AI Paste' for non-mobile devices.");
-    }
-  };
+    const send = () => {
+        const subject = encodeURIComponent(`Regarding: ${lead.context || "Connect"}`);
+        const body = encodeURIComponent(msg);
+        window.location.href = `mailto:${lead.email}?subject=${subject}&body=${body}`;
+        if(index < campaignList.length - 1) setIndex(index + 1);
+        else alert("Campaign Finished!");
+    };
 
-  return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-safe">
-      <header className="bg-white p-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
-         <h1 className="font-bold text-xl flex items-center gap-2 text-gray-800">
-           <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center font-black">T</div> Thrivoy
-         </h1>
-         <div className="flex gap-2">
-           <button onClick={shareCard} className="p-2 rounded-full bg-blue-50 text-blue-600"><ScanLine size={20}/></button>
-           <button onClick={onRefresh} className={`p-2 rounded-full bg-gray-100 ${loading && 'animate-spin'}`}><RefreshCw size={20}/></button>
-           <button onClick={() => onViewChange("settings")} className="p-2 rounded-full bg-gray-100"><Settings size={20}/></button>
-         </div>
-      </header>
-       
-      <main className="p-4 space-y-4 animate-in fade-in">
-         {/* Stats */}
-         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-xl shadow-blue-200 flex justify-between items-center relative overflow-hidden">
-            <div className="relative z-10">
-               <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p>
-               <p className="text-4xl font-black mt-1">{stats.today}</p>
-            </div>
-            <div className="bg-white/20 p-3 rounded-xl relative z-10"><Zap size={24} fill="currentColor"/></div>
-         </div>
+    if(!lead) return <div className="p-10 text-center">No leads with email found in selection.<br/><button onClick={onBack} className="mt-4 text-blue-600 underline">Go Back</button></div>;
 
-         {/* Queue Status */}
-         <button onClick={() => onViewChange("list")} className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors">
-            <div className="flex items-center gap-3">
-               <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><ListIcon size={20}/></div>
-               <div className="text-left">
-                  <p className="font-bold text-gray-800">Active Queue</p>
-                  <p className="text-xs text-gray-500">{queue.length} / {LEAD_LIMIT} leads</p>
-               </div>
-            </div>
-            <ChevronRight size={20} className="text-gray-300"/>
-         </button>
-
-         {/* Actions */}
-         <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => onViewChange("camera")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform">
-               <Camera size={28} className="text-purple-500"/>
-               <span className="font-bold text-sm text-gray-700">Scan Card</span>
-            </button>
-            <button onClick={() => onViewChange("bulk")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform">
-               <Wand2 size={28} className="text-pink-500"/>
-               <span className="font-bold text-sm text-gray-700">AI Paste</span>
-            </button>
-            <button onClick={() => onViewChange("manual")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform">
-               <UserPlus size={28} className="text-green-500"/>
-               <span className="font-bold text-sm text-gray-700">Add One</span>
-            </button>
-            <button onClick={() => onViewChange("hotlist")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform">
-               <Flame size={28} className="text-orange-500"/>
-               <span className="font-bold text-sm text-gray-700">Hot Vault</span>
-            </button>
-         </div>
-         
-         {('contacts' in navigator) && (
-            <button onClick={importContacts} className="w-full bg-indigo-50 text-indigo-700 p-3 rounded-xl border border-indigo-100 font-bold flex items-center justify-center gap-2">
-               <Users size={20}/> Import from Contacts
-            </button>
-         )}
-
-         <div className="flex gap-2">
-            <label className="flex-1 bg-gray-100 p-3 rounded-xl text-center text-xs font-bold text-gray-500 cursor-pointer hover:bg-gray-200 flex items-center justify-center gap-2">
-               <Upload size={16}/> Upload CSV <input type="file" accept=".csv" onChange={onUpload} className="hidden"/>
-            </label>
-            <button onClick={() => onViewChange("help")} className="bg-gray-100 p-3 rounded-xl text-gray-500"><HelpCircle size={16}/></button>
-         </div>
-
-         {queue.length > 0 && (
-           <button onClick={() => onViewChange("stack")} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 mt-4 active:scale-[0.98] transition-transform">
-              <Play fill="currentColor" size={20}/> Start Calling
-           </button>
-         )}
-      </main>
-    </div>
-  );
-}
-
-function HotList({ clientId, onBack }) {
-   const [leads, setLeads] = useState([]);
-   const [loading, setLoading] = useState(true);
-
-   useEffect(() => {
-     signedRequest("GET_HOTLIST", { client_id: clientId })
-       .then(r => r.json())
-       .then(j => { setLeads(j.data || []); setLoading(false); });
-   }, [clientId]);
-
-   return (
-     <div className="h-screen bg-gray-50 flex flex-col">
-       <div className="bg-white p-4 border-b flex items-center gap-3 sticky top-0">
-          <button onClick={onBack}><ArrowLeft/></button>
-          <h2 className="font-bold flex items-center gap-2"><Flame className="text-orange-500" fill="currentColor"/> Hot Vault</h2>
-       </div>
-       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {loading ? <div className="text-center p-10 text-gray-400">Opening Vault...</div> : leads.length === 0 ? <div className="text-center p-10 text-gray-400">No hot leads yet.</div> : (
-             leads.map((lead, i) => (
-                <div key={i} className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm flex justify-between items-center">
-                   <div>
-                      <h3 className="font-bold text-gray-800">{lead.name}</h3>
-                      <p className="text-blue-600 font-mono text-sm">{lead.phone}</p>
-                   </div>
-                   <a href={`tel:${lead.phone}`} className="bg-green-100 text-green-700 p-2 rounded-full"><Phone size={18}/></a>
+    return (
+        <div className="h-screen bg-slate-100 flex flex-col items-center justify-center p-6">
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-6 relative">
+                <div className="flex justify-between items-center mb-4">
+                    <button onClick={onBack}><ArrowLeft/></button>
+                    <span className="text-xs font-bold text-gray-400">Email {index + 1} of {campaignList.length}</span>
                 </div>
-             ))
-          )}
-       </div>
-     </div>
-   );
+                <h2 className="text-2xl font-bold truncate">{lead.name}</h2>
+                <p className="text-blue-600 font-mono text-sm mb-4">{lead.email}</p>
+                <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full h-32 p-3 bg-gray-50 rounded-xl mb-4 text-sm resize-none outline-none focus:ring-2 focus:ring-blue-100"/>
+                
+                <button onClick={send} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 mb-2">
+                    <Send size={18}/> Send & Next
+                </button>
+                <button onClick={() => { if(index < campaignList.length - 1) setIndex(index + 1); }} className="w-full bg-gray-100 text-gray-500 py-3 rounded-xl font-bold text-sm">Skip</button>
+            </div>
+        </div>
+    );
 }
 
-function QueueList({ queue, onBack, onSelect }) {
-  // PERFORMANCE FIX: Virtualized List
+// --- UPDATED: QueueList with Selection ---
+function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, onPowerEmail, clientId, onRefresh }) {
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [newTag, setNewTag] = useState("");
+
+  const toggleSelect = (id) => {
+      setSelectionMode(true);
+      const next = new Set(selectedLeads);
+      if(next.has(id)) next.delete(id); else next.add(id);
+      setSelectedLeads(next);
+      if(next.size === 0) setSelectionMode(false);
+  };
+
+  const handleBCC = () => {
+      const emails = queue.filter(l => selectedLeads.has(l.lead_id) && l.email).map(l => l.email).join(',');
+      if(!emails) return alert("No emails in selection");
+      window.location.href = `mailto:?bcc=${emails}&subject=Update`;
+  };
+
+  const handleAddTag = async () => {
+      if(!newTag) return;
+      await signedRequest("UPDATE_TAGS", { client_id: clientId, lead_ids: Array.from(selectedLeads), tag: newTag });
+      alert("Tags Added!");
+      setShowTagInput(false);
+      setNewTag("");
+      setSelectedLeads(new Set());
+      setSelectionMode(false);
+      onRefresh();
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-       <div className="bg-white p-4 border-b flex items-center gap-3">
-          <button onClick={onBack}><ArrowLeft/></button>
-          <h2 className="font-bold">Queue ({queue.length})</h2>
+       <div className="bg-white p-4 border-b flex items-center justify-between shadow-sm z-10">
+          <div className="flex items-center gap-3">
+             <button onClick={onBack}><ArrowLeft/></button>
+             <h2 className="font-bold">{selectionMode ? `${selectedLeads.size} Selected` : `Queue (${queue.length})`}</h2>
+          </div>
+          {!selectionMode && <button onClick={() => setSelectionMode(true)} className="text-sm font-bold text-blue-600">Select</button>}
+          {selectionMode && <button onClick={() => { setSelectionMode(false); setSelectedLeads(new Set()); }} className="text-sm font-bold text-gray-500">Cancel</button>}
        </div>
-       <div className="flex-1">
+       
+       <div className="flex-1 relative">
           <AutoSizer>
              {({ height, width }) => (
-                <List height={height} width={width} itemCount={queue.length} itemSize={80} itemData={{queue, onSelect}}>
+                <List height={height} width={width} itemCount={queue.length} itemSize={80} itemData={{queue, onSelect, selected: selectedLeads, toggleSelect, selectionMode}}>
                    {QueueRow}
                 </List>
              )}
           </AutoSizer>
        </div>
+
+       {/* BULK ACTION BAR */}
+       {selectionMode && selectedLeads.size > 0 && (
+           <div className="bg-white border-t p-4 flex gap-2 overflow-x-auto pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+               <button onClick={onPowerEmail} className="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Zap size={16}/> Rapid Fire</button>
+               <button onClick={handleBCC} className="bg-gray-900 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Mail size={16}/> BCC Blast</button>
+               <button onClick={() => setShowTagInput(true)} className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Tag size={16}/> Tag</button>
+           </div>
+       )}
+
+       {/* TAG MODAL */}
+       {showTagInput && (
+           <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+               <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
+                   <h3 className="font-bold mb-4">Add Tag to {selectedLeads.size} leads</h3>
+                   <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot, #Jan, #Investor" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500"/>
+                   <div className="flex gap-2">
+                       <button onClick={() => setShowTagInput(false)} className="flex-1 py-3 font-bold text-gray-500">Cancel</button>
+                       <button onClick={handleAddTag} className="flex-1 bg-purple-600 text-white rounded-xl font-bold py-3">Save</button>
+                   </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 }
@@ -481,11 +442,9 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     vibrate();
     if(type === 'call') window.location.href = `tel:${active.phone}`;
     else if(type === 'email') {
-        // NATIVE EMAIL SUITE
         const subject = encodeURIComponent(`Regarding: ${active.context || "Our Discussion"}`);
         const body = encodeURIComponent(msg);
         window.location.href = `mailto:${active.email}?subject=${subject}&body=${body}`;
-        // Optional: Auto-log email as action? Let's leave user to dispose manually for now.
         submitAction("Emailed");
     }
     else if(type === 'share') {
@@ -527,7 +486,6 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
          <AnimatePresence mode='wait'>
             {mode === 'card' ? (
               <motion.div key="card" animate={controls} className="bg-white w-full max-w-sm rounded-3xl shadow-xl overflow-hidden flex flex-col h-[75vh] border border-gray-100 relative">
-                 {/* POLYGLOT MENU */}
                  {polyglot && (
                     <div className="absolute top-16 right-4 bg-white shadow-xl border rounded-xl p-2 z-20 flex flex-col gap-2">
                        <button onClick={() => handleRewrite('Professional')} className="text-xs font-bold p-2 hover:bg-gray-50 text-left">👔 Professional</button>
@@ -761,7 +719,7 @@ function ManualForm({ prefill, onBack, onSubmit }) {
     );
 }
 
-function SettingsForm({ template, setTemplate, library, setLibrary, userProfile, clientId, onBack, onLogout }) {
+function SettingsForm({ template, setTemplate, library, setLibrary, userProfile, setUserProfile, clientId, onBack, onLogout }) {
     const [newName, setNewName] = useState("");
     const [title, setTitle] = useState(userProfile.title || "");
     const [photo, setPhoto] = useState(userProfile.photo || "");
