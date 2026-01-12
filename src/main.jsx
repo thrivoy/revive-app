@@ -704,6 +704,7 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
     const [text, setText] = useState(""); 
     const [parsed, setParsed] = useState(initialData || []); 
     const [loading, setLoading] = useState(false);
+    const [errors, setErrors] = useState({});
     
     const handleAI = async () => { 
       if(!text) return; 
@@ -716,6 +717,27 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
       } catch(e) { alert("AI Error: " + e.message); } 
       finally { setLoading(false); } 
     };
+
+    const validatePhone = (phone) => {
+      const cleaned = String(phone).replace(/\D/g, '');
+      return cleaned.length >= 10 && cleaned.length <= 13;
+    };
+
+    const handleSubmit = () => {
+      const newErrors = {};
+      parsed.forEach((l, i) => {
+        if (!l.name || !l.name.trim()) newErrors[`${i}-name`] = true;
+        if (!validatePhone(l.phone)) newErrors[`${i}-phone`] = true;
+      });
+      
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        alert("Please fix highlighted fields");
+        return;
+      }
+      
+      onSubmit(parsed);
+    };
     
     if(parsed.length > 0) return (
       <div className="h-screen flex flex-col bg-gray-50">
@@ -726,20 +748,36 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {parsed.map((l, i) => (
             <div key={i} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-              <input value={l.name} onChange={e => {const n=[...parsed];n[i].name=e.target.value;setParsed(n)}} className="font-bold w-full outline-none text-gray-800 border-b border-transparent focus:border-blue-500"/>
+              <input 
+                value={l.name} 
+                onChange={e => {const n=[...parsed];n[i].name=e.target.value;setParsed(n);setErrors(prev=>({...prev,[`${i}-name`]:false}))}} 
+                className={`font-bold w-full outline-none text-gray-800 border-b ${errors[`${i}-name`] ? 'border-red-500 bg-red-50' : 'border-transparent focus:border-blue-500'}`}
+                placeholder="Name *"
+              />
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs">+91</span>
-                <input value={l.phone} onChange={e => {const n=[...parsed];n[i].phone=e.target.value;setParsed(n)}} className="text-sm font-mono w-full outline-none text-gray-600"/>
+                <span className="text-gray-400 text-xs">📱</span>
+                <input 
+                  value={l.phone} 
+                  onChange={e => {const n=[...parsed];n[i].phone=e.target.value;setParsed(n);setErrors(prev=>({...prev,[`${i}-phone`]:false}))}} 
+                  className={`text-sm font-mono w-full outline-none ${errors[`${i}-phone`] ? 'text-red-600 bg-red-50' : 'text-gray-600'}`}
+                  placeholder="Phone *"
+                />
               </div>
-              <input value={l.email} placeholder="Email" onChange={e => {const n=[...parsed];n[i].email=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
-              <input value={l.company} placeholder="Company" onChange={e => {const n=[...parsed];n[i].company=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
-              <input value={l.website||""} placeholder="Website" onChange={e => {const n=[...parsed];n[i].website=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
-              <input value={l.designation||""} placeholder="Designation" onChange={e => {const n=[...parsed];n[i].designation=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100"/>
+              <input value={l.email||""} placeholder="Email" onChange={e => {const n=[...parsed];n[i].email=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100 focus:border-blue-500 p-1"/>
+              <input value={l.company||""} placeholder="Company" onChange={e => {const n=[...parsed];n[i].company=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100 focus:border-blue-500 p-1"/>
+              <input value={l.website||""} placeholder="Website" onChange={e => {const n=[...parsed];n[i].website=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100 focus:border-blue-500 p-1"/>
+              <input value={l.designation||""} placeholder="Designation" onChange={e => {const n=[...parsed];n[i].designation=e.target.value;setParsed(n)}} className="text-xs w-full outline-none text-gray-500 border-b border-gray-100 focus:border-blue-500 p-1"/>
+              <textarea 
+                value={l.context||""} 
+                placeholder="Notes / Context (AI extracted)" 
+                onChange={e => {const n=[...parsed];n[i].context=e.target.value;setParsed(n)}} 
+                className="text-xs w-full outline-none text-gray-600 bg-gray-50 border border-gray-200 focus:border-blue-500 rounded-lg p-2 min-h-[60px] resize-none"
+              />
             </div>
           ))}
         </div>
         <div className="p-4 bg-white border-t">
-          <button onClick={() => onSubmit(parsed)} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg">Save All</button>
+          <button onClick={handleSubmit} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-green-700 transition-colors">Save All {parsed.length} Leads</button>
         </div>
       </div>
     );
@@ -766,6 +804,7 @@ function ManualForm({ prefill, onBack, onSubmit }) {
       context: '' 
     }); 
     const [listening, setListening] = useState(false);
+    const [errors, setErrors] = useState({});
     
     const toggleMic = () => { 
       if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported"); 
@@ -775,25 +814,62 @@ function ManualForm({ prefill, onBack, onSubmit }) {
       recognition.onresult = (e) => setForm(f => ({...f, context: f.context + " " + e.results[0][0].transcript})); 
       recognition.start(); 
     };
+
+    const validatePhone = (phone) => {
+      const cleaned = String(phone).replace(/\D/g, '');
+      return cleaned.length >= 10 && cleaned.length <= 13;
+    };
+
+    const handleSubmit = () => {
+      const newErrors = {};
+      if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
+      if (!validatePhone(form.phone)) newErrors.phone = "Invalid phone number (10-13 digits)";
+      
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
+      
+      onSubmit(form);
+    };
     
     return (
       <div className="p-6 bg-white h-screen overflow-y-auto">
         <button onClick={onBack} className="mb-6 text-gray-500"><ArrowLeft/></button>
         <h1 className="text-2xl font-bold mb-6 text-gray-800">Add Lead</h1>
         <div className="space-y-4">
-          <input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} placeholder="Name" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-          <input value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} placeholder="Phone" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-          <div className="grid grid-cols-2 gap-2">
-            <input value={form.email} onChange={e=>setForm({...form, email: e.target.value})} placeholder="Email" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-            <input value={form.company} onChange={e=>setForm({...form, company: e.target.value})} placeholder="Company" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+          <div>
+            <input 
+              value={form.name} 
+              onChange={e=>{setForm({...form, name: e.target.value});setErrors(prev=>({...prev,name:null}))}} 
+              placeholder="Name *" 
+              className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.name ? 'border-red-500 bg-red-50' : ''}`}
+            />
+            {errors.name && <p className="text-red-600 text-xs mt-1 ml-2">{errors.name}</p>}
           </div>
-          <input value={form.website} onChange={e=>setForm({...form, website: e.target.value})} placeholder="Website" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-          <input value={form.designation} onChange={e=>setForm({...form, designation: e.target.value})} placeholder="Designation (e.g. Sales Manager)" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+          
+          <div>
+            <input 
+              value={form.phone} 
+              onChange={e=>{setForm({...form, phone: e.target.value});setErrors(prev=>({...prev,phone:null}))}} 
+              placeholder="Phone * (10 digits)" 
+              type="tel"
+              className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.phone ? 'border-red-500 bg-red-50' : ''}`}
+            />
+            {errors.phone && <p className="text-red-600 text-xs mt-1 ml-2">{errors.phone}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <input value={form.email||""} onChange={e=>setForm({...form, email: e.target.value})} placeholder="Email" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+            <input value={form.company||""} onChange={e=>setForm({...form, company: e.target.value})} placeholder="Company" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+          </div>
+          <input value={form.website||""} onChange={e=>setForm({...form, website: e.target.value})} placeholder="Website" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+          <input value={form.designation||""} onChange={e=>setForm({...form, designation: e.target.value})} placeholder="Designation (e.g. Sales Manager)" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
           <div className="relative">
-            <input value={form.context} onChange={e=>setForm({...form, context: e.target.value})} placeholder="Notes / Context" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
+            <input value={form.context||""} onChange={e=>setForm({...form, context: e.target.value})} placeholder="Notes / Context" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
             <button onClick={toggleMic} className={`absolute right-2 top-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button>
           </div>
-          <button onClick={() => onSubmit(form)} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg">Save to Queue</button>
+          <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg hover:bg-blue-700 transition-colors">Save to Queue</button>
         </div>
       </div>
     );
@@ -810,8 +886,16 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
       linkedin: userProfile.socials?.linkedin||"", 
       website: userProfile.website||"" 
     });
+    const [pinError, setPinError] = useState("");
+    const [showPinGenerator, setShowPinGenerator] = useState(false);
     
-    const saveProfile = async () => { 
+    const saveProfile = async () => {
+      // Validate PIN
+      if (form.pin && !/^\d{4}$/.test(form.pin)) {
+        setPinError("PIN must be exactly 4 digits");
+        return;
+      }
+
       const socials = { instagram: form.instagram, linkedin: form.linkedin }; 
       await signedRequest("UPDATE_PROFILE", { 
         client_id: clientId, 
@@ -830,6 +914,13 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
       safeStorage.setItem(`tpl_${clientId}`, template);
       safeStorage.setItem(`lib_${clientId}`, JSON.stringify(library));
       alert("Templates Saved!");
+    };
+
+    const generateRandomPin = () => {
+      const newPin = String(Math.floor(1000 + Math.random() * 9000));
+      setForm({...form, pin: newPin});
+      setPinError("");
+      setShowPinGenerator(false);
     };
     
     const handleLogout = () => { if (confirm("Log out?")) onLogout(); };
@@ -883,11 +974,37 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
            </div>
            
            <div className="mb-8 p-4 border rounded-xl bg-gray-50">
-             <h3 className="font-bold mb-4 flex items-center gap-2 text-red-600"><KeyRound size={16}/> Security</h3>
-             <input type="number" value={form.pin} onChange={e=>setForm({...form, pin: e.target.value})} placeholder="4-Digit PIN" className="w-full p-2 rounded border text-sm outline-none font-mono tracking-widest" maxLength={4}/>
+             <h3 className="font-bold mb-4 flex items-center gap-2 text-red-600"><KeyRound size={16}/> Security PIN</h3>
+             <div className="space-y-3">
+               <div>
+                 <div className="flex gap-2">
+                   <input 
+                     type="text" 
+                     inputMode="numeric"
+                     maxLength={4}
+                     value={form.pin} 
+                     onChange={e=>{
+                       const val = e.target.value.replace(/\D/g, '');
+                       setForm({...form, pin: val});
+                       setPinError("");
+                     }} 
+                     placeholder="4-Digit PIN" 
+                     className={`flex-1 p-2 rounded border text-sm outline-none font-mono tracking-widest text-center ${pinError ? 'border-red-500 bg-red-50' : ''}`}
+                   />
+                   <button 
+                     onClick={() => setShowPinGenerator(true)}
+                     className="px-4 py-2 bg-blue-100 text-blue-700 rounded font-bold text-sm hover:bg-blue-200 transition-colors"
+                   >
+                     Generate
+                   </button>
+                 </div>
+                 {pinError && <p className="text-red-600 text-xs mt-1">{pinError}</p>}
+               </div>
+               <p className="text-xs text-gray-500">This PIN is required to access your workspace. Keep it safe!</p>
+             </div>
            </div>
            
-           <button onClick={saveProfile} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg mb-8">Save All Changes</button>
+           <button onClick={saveProfile} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg mb-8 hover:bg-blue-700 transition-colors">Save All Changes</button>
            
            <div className="mb-8">
              <h3 className="font-bold mb-2">Default Message Template</h3>
@@ -910,7 +1027,30 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
              </div>
            </div>
 
-           <button onClick={saveTemplate} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold shadow-lg mb-4">Save Templates</button>
+           <button onClick={saveTemplate} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold shadow-lg mb-4 hover:bg-purple-700 transition-colors">Save Templates</button>
+
+           {showPinGenerator && (
+             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+               <div className="bg-white p-6 rounded-2xl max-w-sm w-full">
+                 <h3 className="font-bold mb-4 text-center">Generate New PIN</h3>
+                 <p className="text-sm text-gray-600 mb-6 text-center">Generate a random 4-digit PIN for your workspace security.</p>
+                 <div className="flex gap-2">
+                   <button 
+                     onClick={() => setShowPinGenerator(false)} 
+                     className="flex-1 py-3 font-bold text-gray-500 border rounded-xl hover:bg-gray-50"
+                   >
+                     Cancel
+                   </button>
+                   <button 
+                     onClick={generateRandomPin} 
+                     className="flex-1 bg-blue-600 text-white rounded-xl font-bold py-3 hover:bg-blue-700"
+                   >
+                     Generate
+                   </button>
+                 </div>
+               </div>
+             </div>
+           )}
         </div>
     );
 }
