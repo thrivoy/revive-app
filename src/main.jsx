@@ -17,7 +17,7 @@ import {
   ThumbsUp, Snowflake, Camera, Mic, LogOut, 
   Share2, Users, RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle,
   LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck, Mail, Globe, Building2,
-  CheckSquare, Tag, Send, Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, AlertTriangle, CreditCard
+  CheckSquare, Tag, Send, Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, AlertTriangle, CreditCard, Sparkles
 } from 'lucide-react';
 
 // --- MEMORY LEAK FIX ---
@@ -127,6 +127,34 @@ function validateEmail(email) {
   if (!email) return true; // Optional field
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(email);
+}
+
+// --- BACK BUTTON & NAVIGATION PROTECTION ---
+function useBackButtonHandler(onBack, shouldWarn = false, warningMessage = "Discard changes?") {
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (shouldWarn) {
+        if (!window.confirm(warningMessage)) {
+          window.history.pushState(null, '', window.location.href);
+          return;
+        }
+      }
+      onBack();
+    };
+
+    // Push initial state
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [onBack, shouldWarn, warningMessage]);
+}
+
+// Detect if form has unsaved changes
+function useUnsavedChanges(currentData, initialData) {
+  return JSON.stringify(currentData) !== JSON.stringify(initialData);
 }
 
 // --- COMPONENTS ---
@@ -330,161 +358,321 @@ function App() {
   const [userProfile, setUserProfile] = useState({});
 
   useEffect(() => {
-      const init = async () => {
-          const params = new URLSearchParams(window.location.search);
-          const keyParam = params.get("key");
-          const slugParam = params.get("u");
-          const refParam = params.get("ref");
-          
-          if(refParam) sessionStorage.setItem('referrer_id', refParam);
-          const pathSlug = window.location.pathname.replace('/', '');
-          
-          if (keyParam) {
-              setClientId(keyParam);
-              safeStorage.setItem("thrivoy_client_id", keyParam);
-              const hasAuth = safeStorage.getItem(`thrivoy_auth_${keyParam}`);
-              if(hasAuth) setView("menu"); else setView("pin_check");
-              return;
-          }
+    const init = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const keyParam = params.get("key");
+      const slugParam = params.get("u");
+      const refParam = params.get("ref");
+      
+      if (refParam) sessionStorage.setItem('referrer_id', refParam);
+      const pathSlug = window.location.pathname.replace('/', '');
+      
+      if (keyParam) {
+        setClientId(keyParam);
+        safeStorage.setItem("thrivoy_client_id", keyParam);
+        const hasAuth = safeStorage.getItem(`thrivoy_auth_${keyParam}`);
+        if (hasAuth) setView("menu");
+        else setView("pin_check");
+        return;
+      }
 
-          const targetSlug = slugParam || (pathSlug && pathSlug.length > 2 ? pathSlug : null);
-          if (targetSlug) {
-              try {
-                  const res = await signedRequest("GET_CLIENT_BY_SLUG", { slug: targetSlug });
-                  const json = await res.json();
-                  if (json.status === 'success') {
-                      setPublicProfile(json.data);
-                      setView("public_card");
-                  } else {
-                      const stored = safeStorage.getItem("thrivoy_client_id");
-                      if(stored) {
-                          setClientId(stored);
-                          const hasAuth = safeStorage.getItem(`thrivoy_auth_${stored}`);
-                          setView(hasAuth ? "menu" : "pin_check");
-                      } else { setView("landing"); }
-                  }
-              } catch(e) { setView("landing"); }
-              return;
-          }
-
-          const stored = safeStorage.getItem("thrivoy_client_id");
-          if (stored) {
+      const targetSlug = slugParam || (pathSlug && pathSlug.length > 2 ? pathSlug : null);
+      if (targetSlug) {
+        try {
+          const res = await signedRequest("GET_CLIENT_BY_SLUG", { slug: targetSlug });
+          const json = await res.json();
+          if (json.status === 'success') {
+            setPublicProfile(json.data);
+            setView("public_card");
+          } else {
+            const stored = safeStorage.getItem("thrivoy_client_id");
+            if (stored) {
               setClientId(stored);
               const hasAuth = safeStorage.getItem(`thrivoy_auth_${stored}`);
               setView(hasAuth ? "menu" : "pin_check");
-          } else { setView("landing"); }
-      };
-      init();
+            } else {
+              setView("landing");
+            }
+          }
+        } catch (e) {
+          setView("landing");
+        }
+        return;
+      }
+
+      const stored = safeStorage.getItem("thrivoy_client_id");
+      if (stored) {
+        setClientId(stored);
+        const hasAuth = safeStorage.getItem(`thrivoy_auth_${stored}`);
+        setView(hasAuth ? "menu" : "pin_check");
+      } else {
+        setView("landing");
+      }
+    };
+    init();
   }, []);
 
   useEffect(() => {
-      if (clientId && view === 'menu' && clientId !== ADMIN_KEY) {
-          fetchQueue(clientId);
-          signedRequest("GET_CLIENT_PROFILE", { client_id: clientId }).then(r=>r.json()).then(j => {
-              if(j.data) {
-                  setUserProfile(j.data);
-                  if(j.data.secret) safeStorage.setItem(`thrivoy_secret_${clientId}`, j.data.secret);
-                  
-                  const savedTpl = safeStorage.getItem(`tpl_${clientId}`);
-                  if(savedTpl) setTemplate(savedTpl); else setTemplate("Hi {{name}}, regarding {{context}}.");
-                  
-                  const savedLib = safeStorage.getItem(`lib_${clientId}`);
-                  if(savedLib) setLibrary(JSON.parse(savedLib));
-              }
-          });
-      }
+    if (clientId && view === 'menu' && clientId !== ADMIN_KEY) {
+      // FIXED: Force fresh fetch on menu view
+      requestCache.clear(); // Clear all cached requests
+      fetchQueue(clientId);
+      
+      signedRequest("GET_CLIENT_PROFILE", { client_id: clientId })
+        .then(r => r.json())
+        .then(j => {
+          if (j.data) {
+            setUserProfile(j.data);
+            if (j.data.secret) safeStorage.setItem(`thrivoy_secret_${clientId}`, j.data.secret);
+            
+            const savedTpl = safeStorage.getItem(`tpl_${clientId}`);
+            if (savedTpl) setTemplate(savedTpl);
+            else setTemplate("Hi {{name}}, regarding {{context}}.");
+            
+            const savedLib = safeStorage.getItem(`lib_${clientId}`);
+            if (savedLib) setLibrary(JSON.parse(savedLib));
+          }
+        });
+    }
   }, [clientId, view]);
 
   const fetchQueue = useCallback(async (id) => {
-    if(!id || id === ADMIN_KEY) return;
+    if (!id || id === ADMIN_KEY) return;
     setLoading(true);
     setLoadingMessage("Loading queue...");
+    
+    // FIXED: Clear cache for this specific request
+    const cacheKey = JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } });
+    requestCache.delete(cacheKey);
+    
     try {
-        const res = await signedRequest("GET_QUEUE", { client_id: id });
-        const json = await res.json();
-        if(json.data) { setQueue(json.data.queue || []); setStats(json.data.stats || { today: 0 }); }
-    } catch(e) { console.error(e); } finally { setLoading(false); setLoadingMessage(""); }
+      const res = await signedRequest("GET_QUEUE", { client_id: id });
+      const json = await res.json();
+      if (json.data) {
+        setQueue(json.data.queue || []);
+        setStats(json.data.stats || { today: 0 });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setLoadingMessage("");
+    }
   }, []);
 
   const handleBulkSubmit = async (leads) => {
     setLoading(true);
     setLoadingMessage(`Saving ${leads.length} lead${leads.length !== 1 ? 's' : ''}...`);
     try {
-       const refId = sessionStorage.getItem('referrer_id'); 
-       const res = await signedRequest("ADD_LEADS", { client_id: clientId, leads, ref_id: refId });
-       const json = await res.json();
-       
-       if(json.status === 'success') { 
-         let message = `✅ Saved ${json.count} lead${json.count !== 1 ? 's' : ''}!`;
-         
-         if (json.duplicates > 0) {
-           message += `\n\n⚠️ Skipped ${json.duplicates} duplicate${json.duplicates !== 1 ? 's' : ''}:`;
-           if (json.skipped_leads && json.skipped_leads.length > 0) {
-             const preview = json.skipped_leads.slice(0, 3);
-             preview.forEach(skip => {
-               message += `\n• ${skip.name} (${skip.phone})\n  ${skip.reason}`;
-             });
-             if (json.skipped_leads.length > 3) {
-               message += `\n\n...and ${json.skipped_leads.length - 3} more`;
-             }
-           }
-         }
-         
-         alert(message);
-         await fetchQueue(clientId); 
-         setView("menu"); 
-       } else { 
-         alert("Error: " + json.message); 
-       }
-    } catch(e) {
+      const refId = sessionStorage.getItem('referrer_id');
+      const res = await signedRequest("ADD_LEADS", { client_id: clientId, leads, ref_id: refId });
+      const json = await res.json();
+      
+      if (json.status === 'success') {
+        let message = `✅ Saved ${json.count} lead${json.count !== 1 ? 's' : ''}!`;
+        
+        if (json.duplicates > 0) {
+          message += `\n\n⚠️ Skipped ${json.duplicates} duplicate${json.duplicates !== 1 ? 's' : ''}:`;
+          if (json.skipped_leads && json.skipped_leads.length > 0) {
+            const preview = json.skipped_leads.slice(0, 3);
+            preview.forEach(skip => {
+              message += `\n• ${skip.name} (${skip.phone})\n  ${skip.reason}`;
+            });
+            if (json.skipped_leads.length > 3) {
+              message += `\n\n...and ${json.skipped_leads.length - 3} more`;
+            }
+          }
+        }
+        
+        alert(message);
+        await fetchQueue(clientId);
+        setView("menu");
+      } else {
+        alert("Error: " + json.message);
+      }
+    } catch (e) {
       alert("Failed: " + e.message);
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
       setLoadingMessage("");
     }
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if(!file) return;
-    Papa.parse(file, { header: true, complete: (results) => {
-        const valid = results.data.filter(r => r.Phone || r.Mobile).map(r => ({
-           name: r.Name || "Lead", 
-           phone: r.Phone || r.Mobile, 
-           context: r.Context || r.Notes || "Imported",
-           email: r.Email || "", 
-           company: r.Company || "", 
-           website: r.Website || "",
-           designation: r.Designation || r.Title || ""
-        }));
-        setBulkData(valid); setView("bulk");
-    }});
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      complete: (results) => {
+        const valid = results.data
+          .filter(r => r.Phone || r.Mobile)
+          .map(r => ({
+            name: r.Name || "Lead",
+            phone: r.Phone || r.Mobile,
+            context: r.Context || r.Notes || "Imported",
+            email: r.Email || "",
+            company: r.Company || "",
+            website: r.Website || "",
+            designation: r.Designation || r.Title || ""
+          }));
+        setBulkData(valid);
+        setView("bulk");
+      }
+    });
   };
 
-  if (!isOnline) return <div className="h-screen flex flex-col items-center justify-center p-6 text-center"><WifiOff size={48} className="text-gray-300 mb-4"/><h2 className="text-xl font-bold">Offline</h2><p className="text-gray-500">Check internet.</p></div>;
+  if (!isOnline) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center">
+        <WifiOff size={48} className="text-gray-300 mb-4" />
+        <h2 className="text-xl font-bold">Offline</h2>
+        <p className="text-gray-500">Check internet.</p>
+      </div>
+    );
+  }
 
-  if (view === "loader") return <div className="h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div></div>;
+  if (view === "loader") {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
   if (view === "landing") return <LandingPage />;
   if (view === "admin") return <AdminDashboard />;
   if (clientId === ADMIN_KEY && view !== "admin") return <AdminLogin onLogin={() => setView("admin")} />;
-  if (view === "pin_check") return <PinScreen clientId={clientId} onSuccess={() => { safeStorage.setItem(`thrivoy_auth_${clientId}`, "true"); setView("menu"); }} />;
+  if (view === "pin_check") {
+    return (
+      <PinScreen
+        clientId={clientId}
+        onSuccess={() => {
+          safeStorage.setItem(`thrivoy_auth_${clientId}`, "true");
+          setView("menu");
+        }}
+      />
+    );
+  }
   if (view === "public_card") return <BioLinkCard profile={publicProfile} />;
-  
   if (view === "affiliates") return <AffiliateScreen clientId={clientId} onBack={() => setView("menu")} />;
 
   return (
     <>
       {loading && <LoadingOverlay message={loadingMessage || "Processing..."} />}
       
-      {view === "menu" && <MenuScreen queue={queue} stats={stats} loading={loading} onViewChange={setView} onUpload={handleFileUpload} onRefresh={() => fetchQueue(clientId)} clientId={clientId} onBulkSubmit={handleBulkSubmit} userProfile={userProfile} />}
-      {view === "stack" && <CardStack queue={queue} setQueue={setQueue} template={template} library={library} clientId={clientId} onBack={() => { fetchQueue(clientId); setView("menu"); }} initialLead={activeLead} />}
-      {view === "list" && <QueueList queue={queue} onBack={() => setView("menu")} onSelect={(lead) => { setActiveLead(lead); setView("stack"); }} selectedLeads={selectedLeads} setSelectedLeads={setSelectedLeads} onPowerEmail={() => setView("power_email")} clientId={clientId} onRefresh={() => fetchQueue(clientId)} />}
-      {view === "power_email" && <PowerEmailer queue={queue} selectedIds={selectedLeads} template={template} onBack={() => setView("list")} />}
-      {view === "hotlist" && <HotList clientId={clientId} onBack={() => setView("menu")} />}
-      {view === "camera" && <CameraScan clientId={clientId} onBack={() => setView("menu")} onScanComplete={(d) => { setPrefillData(d); setView("manual"); }} />}
-      {view === "manual" && <ManualForm prefill={prefillData} onBack={() => setView("menu")} onSubmit={(l) => handleBulkSubmit([l])} />}
-      {view === "bulk" && <BulkPasteForm initialData={bulkData} clientId={clientId} onBack={() => setView("menu")} onSubmit={handleBulkSubmit} />}
-      {view === "settings" && <SettingsForm template={template} setTemplate={setTemplate} library={library} setLibrary={setLibrary} userProfile={userProfile} setUserProfile={setUserProfile} clientId={clientId} onBack={() => setView("menu")} onLogout={() => { safeStorage.removeItem("thrivoy_client_id"); safeStorage.removeItem(`thrivoy_auth_${clientId}`); window.location.href = "/"; }} />}
+      {view === "menu" && (
+        <MenuScreen
+          queue={queue}
+          stats={stats}
+          loading={loading}
+          onViewChange={setView}
+          onUpload={handleFileUpload}
+          onRefresh={() => fetchQueue(clientId)}
+          clientId={clientId}
+          onBulkSubmit={handleBulkSubmit}
+          userProfile={userProfile}
+        />
+      )}
+      
+      {view === "stack" && (
+        <CardStack
+          queue={queue}
+          setQueue={setQueue}
+          template={template}
+          library={library}
+          clientId={clientId}
+          onBack={() => {
+            fetchQueue(clientId);
+            setView("menu");
+          }}
+          initialLead={activeLead}
+        />
+      )}
+      
+      {view === "list" && (
+        <QueueList
+          queue={queue}
+          onBack={() => setView("menu")}
+          onSelect={(lead) => {
+            setActiveLead(lead);
+            setView("stack");
+          }}
+          selectedLeads={selectedLeads}
+          setSelectedLeads={setSelectedLeads}
+          onPowerEmail={() => setView("power_email")}
+          clientId={clientId}
+          onRefresh={() => fetchQueue(clientId)}
+        />
+      )}
+      
+      {view === "power_email" && (
+        <PowerEmailer
+          queue={queue}
+          selectedIds={selectedLeads}
+          template={template}
+          onBack={() => setView("list")}
+        />
+      )}
+      
+      {view === "hotlist" && (
+        <HotList
+          clientId={clientId}
+          onBack={() => setView("menu")}
+        />
+      )}
+      
+      {view === "camera" && (
+        <CameraScan
+          clientId={clientId}
+          onBack={() => setView("menu")}
+          onScanComplete={(d) => {
+            setPrefillData(d);
+            setView("manual");
+          }}
+        />
+      )}
+      
+      {view === "manual" && (
+        <ManualForm
+          prefill={prefillData}
+          onBack={() => {
+            setPrefillData(null);
+            setView("menu");
+          }}
+          onSubmit={(l) => {
+            setPrefillData(null);
+            handleBulkSubmit([l]);
+          }}
+        />
+      )}
+      
+      {view === "bulk" && (
+        <BulkPasteForm
+          initialData={bulkData}
+          clientId={clientId}
+          onBack={() => setView("menu")}
+          onSubmit={handleBulkSubmit}
+        />
+      )}
+      
+      {view === "settings" && (
+        <SettingsForm
+          template={template}
+          setTemplate={setTemplate}
+          library={library}
+          setLibrary={setLibrary}
+          userProfile={userProfile}
+          setUserProfile={setUserProfile}
+          clientId={clientId}
+          onBack={() => setView("menu")}
+          onLogout={() => {
+            safeStorage.removeItem("thrivoy_client_id");
+            safeStorage.removeItem(`thrivoy_auth_${clientId}`);
+            window.location.href = "/";
+          }}
+        />
+      )}
+      
       {view === "help" && <HelpScreen onBack={() => setView("menu")} />}
     </>
   );
@@ -662,6 +850,25 @@ function PowerEmailer({ queue, selectedIds, template, onBack }) {
     );
 }
 
+function QueueListSkeleton() {
+  return (
+    <div className="p-4 space-y-3">
+      {[...Array(8)].map((_, i) => (
+        <div key={i} className="p-3 rounded-xl border border-gray-100 bg-white animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+            <div className="flex-1">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+            <div className="w-4 h-4 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, onPowerEmail, clientId, onRefresh }) {
   const [selectionMode, setSelectionMode] = useState(false); 
   const [showTagInput, setShowTagInput] = useState(false); 
@@ -670,6 +877,7 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   const [editingLead, setEditingLead] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Filter queue based on search
   const filteredQueue = useMemo(() => {
@@ -753,7 +961,9 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
         <div className="bg-white p-4 border-b shadow-sm z-10">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <button onClick={onBack}><ArrowLeft/></button>
+                <button onClick={onBack} aria-label="Go back to menu">
+                  <ArrowLeft/>
+                </button>
                 <h2 className="font-bold">{selectionMode ? `${selectedLeads.size} Selected` : `Queue (${filteredQueue.length})`}</h2>
               </div>
               {!selectionMode && <button onClick={() => setSelectionMode(true)} className="text-sm font-bold text-blue-600">Select</button>}
@@ -768,12 +978,13 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, phone, email..."
                 className="w-full p-3 pl-10 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500 text-sm"
+                aria-label="Search leads"
               />
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               </div>
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search">
                   <X size={16}/>
                 </button>
               )}
@@ -781,35 +992,53 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
         </div>
 
         <div className="flex-1 relative">
-            <AutoSizer>
-                {({ height, width }) => (
-                    <List 
-                      height={height} 
-                      width={width} 
-                      itemCount={filteredQueue.length} 
-                      itemSize={80} 
-                      itemData={{
-                        queue: filteredQueue, 
-                        onSelect: (lead) => {
-                          if (!selectionMode) onSelect(lead);
-                        }, 
-                        selected: selectedLeads, 
-                        toggleSelect, 
-                        selectionMode,
-                        onLongPress: handleLongPress
-                      }}
-                    >
-                      {QueueRow}
-                    </List>
-                )}
-            </AutoSizer>
+            {isLoading ? (
+              <QueueListSkeleton />
+            ) : filteredQueue.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <div className="text-center">
+                  <ListIcon size={48} className="mx-auto mb-4 opacity-50"/>
+                  <p className="font-bold">No leads found</p>
+                  <p className="text-sm">Try adjusting your search</p>
+                </div>
+              </div>
+            ) : (
+              <AutoSizer>
+                  {({ height, width }) => (
+                      <List 
+                        height={height} 
+                        width={width} 
+                        itemCount={filteredQueue.length} 
+                        itemSize={80} 
+                        itemData={{
+                          queue: filteredQueue, 
+                          onSelect: (lead) => {
+                            if (!selectionMode) onSelect(lead);
+                          }, 
+                          selected: selectedLeads, 
+                          toggleSelect, 
+                          selectionMode,
+                          onLongPress: handleLongPress
+                        }}
+                      >
+                        {QueueRow}
+                      </List>
+                  )}
+              </AutoSizer>
+            )}
         </div>
 
         {selectionMode && selectedLeads.size > 0 && (
             <div className="bg-white border-t p-4 flex gap-2 overflow-x-auto pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                <button onClick={onPowerEmail} className="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Zap size={16}/> Rapid Fire</button>
-                <button onClick={handleBCCWithConfirm} className="bg-gray-900 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Mail size={16}/> BCC Blast</button>
-                <button onClick={() => setShowTagInput(true)} className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2"><Tag size={16}/> Tag</button>
+                <button onClick={onPowerEmail} className="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Start rapid fire email campaign">
+                  <Zap size={16}/> Rapid Fire
+                </button>
+                <button onClick={handleBCCWithConfirm} className="bg-gray-900 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Send BCC email to selected leads">
+                  <Mail size={16}/> BCC Blast
+                </button>
+                <button onClick={() => setShowTagInput(true)} className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Add tag to selected leads">
+                  <Tag size={16}/> Tag
+                </button>
             </div>
         )}
 
@@ -818,7 +1047,7 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
             <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
                 <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
                     <h3 className="font-bold mb-4">Add Tag</h3>
-                    <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500"/>
+                    <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500" aria-label="Enter tag name"/>
                     <div className="flex gap-2">
                         <button onClick={() => setShowTagInput(false)} className="flex-1 py-3 font-bold text-gray-500">Cancel</button>
                         <button onClick={handleAddTag} className="flex-1 bg-purple-600 text-white rounded-xl font-bold py-3">Save</button>
@@ -856,214 +1085,392 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
 function CardStack({ queue, setQueue, template, library, clientId, onBack, initialLead }) {
   const [active, setActive] = useState(initialLead || queue[0]);
   const [msg, setMsg] = useState("");
-  const [msgCache, setMsgCache] = useState({}); // Cache messages per lead
+  const [msgCache, setMsgCache] = useState({});
   const controls = useAnimation();
   const [mode, setMode] = useState("card");
   const [polyglot, setPolyglot] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
   const [lastAction, setLastAction] = useState(null);
-  
-  // Save message to cache when it changes
-  useEffect(() => {
-    if (active && msg) {
-      setMsgCache(prev => ({ ...prev, [active.lead_id]: msg }));
-    }
-  }, [msg, active]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    if(!active) return;
-    const ctx = (active.context || "").split(" ||| ")[0];
+  useBackButtonHandler(
+    () => {
+      if (isProcessing) {
+        alert("Action in progress, please wait");
+        return;
+      }
+      if (window.confirm("Exit calling queue?")) {
+        onBack();
+      }
+    },
+    isProcessing || queue.length > 0,
+    "Exit calling queue? Progress will be lost."
+  );
+
+  const generateMessage = useCallback((lead) => {
+    const ctx = (lead.context || "").split(" ||| ")[0];
     let tpl = template;
     const match = library.find(l => ctx.toLowerCase().includes(l.name.toLowerCase()));
-    if(match) tpl = match.text;
-    
-    // Check if we have a cached message for this lead
+    if (match) tpl = match.text;
+    return tpl.replace("{{name}}", lead.name).replace("{{context}}", ctx);
+  }, [template, library]);
+
+  useEffect(() => {
+    if (!active) return;
     const cachedMsg = msgCache[active.lead_id];
     if (cachedMsg) {
       setMsg(cachedMsg);
     } else {
-      setMsg(tpl.replace("{{name}}", active.name).replace("{{context}}", ctx));
+      const newMsg = generateMessage(active);
+      setMsg(newMsg);
+      setMsgCache(prev => ({ ...prev, [active.lead_id]: newMsg }));
     }
-    
     controls.set({ x: 0, opacity: 1 });
-  }, [active, template, library, controls, msgCache]);
-  
+  }, [active?.lead_id]);
+
+  useEffect(() => {
+    if (active && msg && msg !== msgCache[active.lead_id]) {
+      setMsgCache(prev => ({ ...prev, [active.lead_id]: msg }));
+    }
+  }, [msg]);
+
   const next = () => {
-    const idx = queue.findIndex(l => l.lead_id === active.lead_id); 
-    if(idx < queue.length - 1) { 
-      setActive(queue[idx+1]); 
-      setMode("card"); 
-    } else { 
-      onBack(); 
-    } 
+    const idx = queue.findIndex(l => l.lead_id === active.lead_id);
+    if (idx < queue.length - 1) {
+      setActive(queue[idx + 1]);
+      setMode("card");
+    } else {
+      onBack();
+    }
   };
 
-  const submitAction = async (outcome) => { 
-    vibrate(); 
-    await controls.start({ x: 500, opacity: 0 }); 
-    
-    // Save action for undo
+  const submitAction = async (outcome) => {
+    setIsProcessing(true);
+    vibrate();
+    await controls.start({ x: 500, opacity: 0 });
     setLastAction({ lead: active, outcome });
     setShowUndo(true);
-    
-    // Hide undo after 3 seconds
     setTimeout(() => setShowUndo(false), 3000);
-    
-    setQueue(prev => prev.filter(l => l.lead_id !== active.lead_id)); 
-    await signedRequest("MARK_SENT", { 
-      client_id: clientId, 
-      lead_id: active.lead_id, 
-      outcome 
-    }); 
-    next(); 
+    setQueue(prev => prev.filter(l => l.lead_id !== active.lead_id));
+    try {
+      await signedRequest("MARK_SENT", {
+        client_id: clientId,
+        lead_id: active.lead_id,
+        outcome
+      });
+    } catch (e) {
+      console.error("Failed to mark sent:", e);
+    } finally {
+      setIsProcessing(false);
+    }
+    next();
   };
 
   const handleUndo = async () => {
     if (!lastAction) return;
-    
+    setIsProcessing(true);
     vibrate(100);
     setShowUndo(false);
-    
-    // Restore lead to queue
     setQueue(prev => [lastAction.lead, ...prev]);
-    
-    // Mark as pending in backend
-    await signedRequest("MARK_SENT", { 
-      client_id: clientId, 
-      lead_id: lastAction.lead.lead_id, 
-      outcome: "UNDO" 
-    });
-    
+    try {
+      await signedRequest("MARK_SENT", {
+        client_id: clientId,
+        lead_id: lastAction.lead.lead_id,
+        outcome: "UNDO"
+      });
+    } catch (e) {
+      console.error("Undo failed:", e);
+    } finally {
+      setIsProcessing(false);
+    }
     setLastAction(null);
   };
 
-  const handleAction = async (type) => { 
-    vibrate(); 
-    if(type === 'call') window.location.href = `tel:${active.phone}`; 
-    else if(type === 'email') { 
-      const s = encodeURIComponent(`Re: ${active.context||"Connect"}`); 
-      const b = encodeURIComponent(msg); 
-      window.location.href = `mailto:${active.email}?subject=${s}&body=${b}`; 
-      submitAction("Emailed"); 
-    } else if(type === 'share') { 
-      if(navigator.share) await navigator.share({ title: 'Lead', text: `${active.name} ${active.phone}` }); 
-    } else { 
-      window.open(`https://wa.me/${active.phone}?text=${encodeURIComponent(msg)}`); 
-    } 
-    if (type !== 'email') setMode("disposition"); 
+  const handleAction = async (type) => {
+    vibrate();
+    if (type === 'call') {
+      window.location.href = `tel:${active.phone}`;
+    } else if (type === 'email') {
+      const s = encodeURIComponent(`Re: ${active.context || "Connect"}`);
+      const b = encodeURIComponent(msg);
+      window.location.href = `mailto:${active.email}?subject=${s}&body=${b}`;
+      submitAction("Emailed");
+    } else if (type === 'share') {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Lead',
+          text: `${active.name} ${active.phone}`
+        });
+      }
+    } else {
+      window.open(`https://wa.me/${active.phone}?text=${encodeURIComponent(msg)}`);
+    }
+    if (type !== 'email') setMode("disposition");
   };
 
-  const handleRewrite = async (tone) => { 
-    setPolyglot(false); 
-    const res = await signedRequest("AI_REWRITE_MSG", { 
-      client_id: clientId, 
-      context: active.context, 
-      current_msg: msg, 
-      tone 
-    }); 
-    const json = await res.json(); 
-    if(json.data) setMsg(json.data); 
+  const handleRewrite = async (tone) => {
+    setIsProcessing(true);
+    setPolyglot(false);
+    try {
+      const res = await signedRequest("AI_REWRITE_MSG", {
+        client_id: clientId,
+        context: active.context,
+        current_msg: msg,
+        tone
+      });
+      const json = await res.json();
+      if (json.data) setMsg(json.data);
+    } catch (e) {
+      alert("AI rewrite failed");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleSnooze = (days) => { 
-    vibrate(); 
-    const d = new Date(); 
-    d.setDate(d.getDate() + days); 
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Call ${active.name}&dates=${d.toISOString().replace(/-|:|\.\d+/g,"")}/${d.toISOString().replace(/-|:|\.\d+/g,"")}`; 
-    window.open(url, '_blank'); 
-    submitAction("Snoozed"); 
+  const handleSnooze = (days) => {
+    vibrate();
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Call ${active.name}&dates=${d.toISOString().replace(/-|:|\.\d+/g, "")}/${d.toISOString().replace(/-|:|\.\d+/g, "")}`;
+    window.open(url, '_blank');
+    submitAction("Snoozed");
   };
-  
-  if(!active) return <div className="p-10 text-center">Queue Finished!</div>;
-  
+
+  if (!active) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <h2 className="text-2xl font-bold">Queue Finished!</h2>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-slate-100 overflow-hidden relative">
-       {/* Undo Toast */}
-       <AnimatePresence>
-         {showUndo && (
-           <motion.div 
-             initial={{ y: -100, opacity: 0 }}
-             animate={{ y: 0, opacity: 1 }}
-             exit={{ y: -100, opacity: 0 }}
-             className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3"
-           >
-             <CheckCircle2 size={16} className="text-green-400"/>
-             <span className="font-bold text-sm">Lead marked</span>
-             <button 
-               onClick={handleUndo}
-               className="ml-2 bg-white text-gray-900 px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-100"
-             >
-               UNDO
-             </button>
-           </motion.div>
-         )}
-       </AnimatePresence>
+      <AnimatePresence>
+        {showUndo && (
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3"
+          >
+            <CheckCircle2 size={16} className="text-green-400"/>
+            <span className="font-bold text-sm">Lead marked</span>
+            <button 
+              onClick={handleUndo}
+              disabled={isProcessing}
+              className="ml-2 bg-white text-gray-900 px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-100 disabled:opacity-50"
+            >
+              UNDO
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-       <div className="p-4 z-10 flex justify-between items-center">
-         <button onClick={onBack} className="p-2 bg-white rounded-full shadow-sm"><ArrowLeft/></button>
-         <div className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm text-gray-500">{queue.findIndex(l => l.lead_id === active.lead_id) + 1} / {queue.length}</div>
-       </div>
+      {/* Processing overlay */}
+      {isProcessing && (
+        <div className="absolute inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-4 shadow-xl">
+            <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
+          </div>
+        </div>
+      )}
 
-       <div className="flex-1 flex items-center justify-center p-4">
-         <AnimatePresence mode='wait'>
-           {mode === 'card' ? (
-             <motion.div key="card" animate={controls} className="bg-white w-full max-w-sm rounded-3xl shadow-xl overflow-hidden flex flex-col h-[75vh] border border-gray-100 relative">
-               {polyglot && (
-                 <div className="absolute top-16 right-4 bg-white shadow-xl border rounded-xl p-2 z-20 flex flex-col gap-2">
-                   <button onClick={() => handleRewrite('Professional')} className="text-xs font-bold p-2 hover:bg-gray-50 text-left">👔 Professional</button>
-                   <button onClick={() => handleRewrite('Friendly')} className="text-xs font-bold p-2 hover:bg-gray-50 text-left">👋 Friendly</button>
-                 </div>
-               )}
-               <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
-                 <h2 className="text-2xl font-bold truncate text-gray-800">{active.name}</h2>
-                 <p className="text-blue-600 font-mono font-medium">{active.phone}</p>
-                 <div className="flex flex-wrap gap-1 mt-2">
-                   {active.designation && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Briefcase size={10}/> {active.designation}</span>}
-                   {active.company && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Building2 size={10}/> {active.company}</span>}
-                   {active.email && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Mail size={10}/> {active.email}</span>}
-                   {active.website && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Globe size={10}/> {active.website}</span>}
-                 </div>
-               </div>
-               <div className="p-4 flex-1 bg-white flex flex-col relative">
-                 <div className="flex justify-between items-center mb-2">
-                   <label className="text-xs font-bold text-gray-400 uppercase">Message</label>
-                   <button onClick={() => setPolyglot(!polyglot)} className="text-purple-600"><Wand2 size={16}/></button>
-                 </div>
-                 <textarea value={msg} onChange={e => setMsg(e.target.value)} className="w-full flex-1 bg-gray-50 p-4 rounded-xl outline-none resize-none text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 transition-all"/>
-               </div>
-               <div className="p-4 grid grid-cols-4 gap-2 bg-white border-t">
-                 <button onClick={() => handleAction('call')} className="bg-gray-900 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Phone size={20}/><span className="text-[8px]">Call</span></button>
-                 <button onClick={() => handleAction('wa')} className="bg-green-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Zap size={20}/><span className="text-[8px]">WA</span></button>
-                 {active.email ? (
-                   <button onClick={() => handleAction('email')} className="bg-blue-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Mail size={20}/><span className="text-[8px]">Mail</span></button>
-                 ) : (
-                   <button disabled className="bg-gray-200 text-gray-400 p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Mail size={20}/><span className="text-[8px]">No Mail</span></button>
-                 )}
-                 <button onClick={() => handleAction('share')} className="bg-pink-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"><Share2 size={20}/><span className="text-[8px]">Share</span></button>
-               </div>
-               <div className="px-4 pb-4 flex gap-2">
-                 <button onClick={() => setMode("snooze")} className="flex-1 bg-gray-100 text-gray-500 py-3 rounded-xl font-bold text-xs">Snooze</button>
-                 <button onClick={() => next()} className="flex-1 bg-gray-100 text-red-400 py-3 rounded-xl font-bold text-xs">Skip</button>
-               </div>
-             </motion.div>
-           ) : mode === 'snooze' ? (
-             <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4">
-               <h3 className="font-bold">Snooze until...</h3>
-               <button onClick={() => handleSnooze(1)} className="w-full p-4 bg-purple-50 text-purple-700 rounded-xl font-bold">Tomorrow</button>
-               <button onClick={() => handleSnooze(3)} className="w-full p-4 bg-purple-50 text-purple-700 rounded-xl font-bold">3 Days</button>
-               <button onClick={() => setMode("card")} className="mt-4 text-sm text-gray-400">Cancel</button>
-             </div>
-           ) : (
-             <motion.div key="disp" initial={{opacity: 0, scale: 0.9}} animate={{opacity: 1, scale: 1}} className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4 border border-gray-200">
-               <h3 className="text-xl font-bold mb-4 text-gray-800">How did it go?</h3>
-               <button onClick={() => submitAction("Interested")} className="w-full p-4 bg-green-100 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-200"><ThumbsUp/> Interested</button>
-               <button onClick={() => submitAction("No Answer")} className="w-full p-4 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200"><Snowflake/> No Answer</button>
-               <button onClick={() => submitAction("Hot")} className="w-full p-4 bg-orange-100 text-orange-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-200"><Flame/> Hot Lead</button>
-               <button onClick={() => setMode("card")} className="mt-4 text-sm text-gray-400">Cancel</button>
-             </motion.div>
-           )}
-         </AnimatePresence>
-       </div>
+      <div className="p-4 z-10 flex justify-between items-center">
+        <button 
+          onClick={() => {
+            if (isProcessing) {
+              alert("Action in progress");
+              return;
+            }
+            if (window.confirm("Exit calling queue?")) onBack();
+          }} 
+          className="p-2 bg-white rounded-full shadow-sm"
+          aria-label="Go back to menu"
+        >
+          <ArrowLeft/>
+        </button>
+        <div className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm text-gray-500">
+          {queue.findIndex(l => l.lead_id === active.lead_id) + 1} / {queue.length}
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-4">
+        <AnimatePresence mode='wait'>
+          {mode === 'card' ? (
+            <motion.div 
+              key="card" 
+              animate={controls} 
+              className="bg-white w-full max-w-sm rounded-3xl shadow-xl overflow-hidden flex flex-col h-[75vh] border border-gray-100 relative"
+            >
+              {polyglot && (
+                <div className="absolute top-16 right-4 bg-white shadow-xl border rounded-xl p-2 z-20 flex flex-col gap-2">
+                  <button 
+                    onClick={() => handleRewrite('Professional')} 
+                    disabled={isProcessing} 
+                    className="text-xs font-bold p-2 hover:bg-gray-50 text-left disabled:opacity-50"
+                  >
+                    👔 Professional
+                  </button>
+                  <button 
+                    onClick={() => handleRewrite('Friendly')} 
+                    disabled={isProcessing} 
+                    className="text-xs font-bold p-2 hover:bg-gray-50 text-left disabled:opacity-50"
+                  >
+                    👋 Friendly
+                  </button>
+                </div>
+              )}
+
+              <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                <h2 className="text-2xl font-bold truncate text-gray-800">{active.name}</h2>
+                <p className="text-blue-600 font-mono font-medium">{active.phone}</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {active.designation && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Briefcase size={10}/> {active.designation}</span>}
+                  {active.company && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Building2 size={10}/> {active.company}</span>}
+                  {active.email && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Mail size={10}/> {active.email}</span>}
+                  {active.website && <span className="text-[10px] bg-white text-gray-600 px-2 py-1 rounded border flex items-center gap-1"><Globe size={10}/> {active.website}</span>}
+                </div>
+              </div>
+
+              <div className="p-4 flex-1 bg-white flex flex-col relative">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase">Message</label>
+                  <button 
+                    onClick={() => setPolyglot(!polyglot)} 
+                    disabled={isProcessing} 
+                    className="text-purple-600 disabled:opacity-50"
+                  >
+                    <Wand2 size={16}/>
+                  </button>
+                </div>
+                <textarea 
+                  value={msg} 
+                  onChange={e => setMsg(e.target.value)} 
+                  disabled={isProcessing} 
+                  className="w-full flex-1 bg-gray-50 p-4 rounded-xl outline-none resize-none text-sm text-gray-700 focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50"
+                />
+              </div>
+
+              <div className="p-4 grid grid-cols-4 gap-2 bg-white border-t">
+                <button 
+                  onClick={() => handleAction('call')} 
+                  disabled={isProcessing} 
+                  className="bg-gray-900 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <Phone size={20}/>
+                  <span className="text-[8px]">Call</span>
+                </button>
+                <button 
+                  onClick={() => handleAction('wa')} 
+                  disabled={isProcessing} 
+                  className="bg-green-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <Zap size={20}/>
+                  <span className="text-[8px]">WA</span>
+                </button>
+                {active.email ? (
+                  <button 
+                    onClick={() => handleAction('email')} 
+                    disabled={isProcessing} 
+                    className="bg-blue-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                  >
+                    <Mail size={20}/>
+                    <span className="text-[8px]">Mail</span>
+                  </button>
+                ) : (
+                  <button 
+                    disabled 
+                    className="bg-gray-200 text-gray-400 p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1"
+                  >
+                    <Mail size={20}/>
+                    <span className="text-[8px]">No Mail</span>
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleAction('share')} 
+                  disabled={isProcessing} 
+                  className="bg-pink-600 text-white p-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <Share2 size={20}/>
+                  <span className="text-[8px]">Share</span>
+                </button>
+              </div>
+
+              <div className="px-4 pb-4 flex gap-2">
+                <button 
+                  onClick={() => setMode("snooze")} 
+                  disabled={isProcessing} 
+                  className="flex-1 bg-gray-100 text-gray-500 py-3 rounded-xl font-bold text-xs disabled:opacity-50"
+                >
+                  Snooze
+                </button>
+                <button 
+                  onClick={() => next()} 
+                  disabled={isProcessing} 
+                  className="flex-1 bg-gray-100 text-red-400 py-3 rounded-xl font-bold text-xs disabled:opacity-50"
+                >
+                  Skip
+                </button>
+              </div>
+            </motion.div>
+          ) : mode === 'snooze' ? (
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4">
+              <h3 className="font-bold">Snooze until...</h3>
+              <button 
+                onClick={() => handleSnooze(1)} 
+                disabled={isProcessing} 
+                className="w-full p-4 bg-purple-50 text-purple-700 rounded-xl font-bold disabled:opacity-50"
+              >
+                Tomorrow
+              </button>
+              <button 
+                onClick={() => handleSnooze(3)} 
+                disabled={isProcessing} 
+                className="w-full p-4 bg-purple-50 text-purple-700 rounded-xl font-bold disabled:opacity-50"
+              >
+                3 Days
+              </button>
+              <button onClick={() => setMode("card")} className="mt-4 text-sm text-gray-400">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <motion.div 
+              key="disp" 
+              initial={{opacity: 0, scale: 0.9}} 
+              animate={{opacity: 1, scale: 1}} 
+              className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4 border border-gray-200"
+            >
+              <h3 className="text-xl font-bold mb-4 text-gray-800">How did it go?</h3>
+              <button 
+                onClick={() => submitAction("Interested")} 
+                disabled={isProcessing} 
+                className="w-full p-4 bg-green-100 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-200 disabled:opacity-50"
+              >
+                <ThumbsUp/> Interested
+              </button>
+              <button 
+                onClick={() => submitAction("No Answer")} 
+                disabled={isProcessing} 
+                className="w-full p-4 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-200 disabled:opacity-50"
+              >
+                <Snowflake/> No Answer
+              </button>
+              <button 
+                onClick={() => submitAction("Hot")} 
+                disabled={isProcessing} 
+                className="w-full p-4 bg-orange-100 text-orange-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-200 disabled:opacity-50"
+              >
+                <Flame/> Hot Lead
+              </button>
+              <button onClick={() => setMode("card")} className="mt-4 text-sm text-gray-400">
+                Cancel
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -1098,6 +1505,19 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
     const [scanning, setScanning] = useState(false);
     const [scanResult, setScanResult] = useState(null);
     
+    // ADDED: Prevent back during scanning
+    useBackButtonHandler(
+      () => {
+        if (scanning) {
+          alert("Please wait for scanning to complete");
+          return;
+        }
+        onBack();
+      },
+      scanning,
+      "AI is still scanning. Wait?"
+    );
+    
     const handleFile = (e) => { 
       const file = e.target.files[0]; 
       if(!file) return; 
@@ -1127,6 +1547,9 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
         } else {
           alert("Could not read card"); 
         }
+      }).catch(err => {
+        setScanning(false);
+        alert("Scan failed: " + err.message);
       }); 
     };
 
@@ -1189,6 +1612,7 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
           <div className="flex flex-col items-center animate-in fade-in">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mb-4"></div>
             <p className="font-bold">AI Analyzing...</p>
+            <p className="text-xs text-gray-400 mt-2">Please wait, don't go back</p>
           </div>
         ) : (
           <>
@@ -1209,7 +1633,15 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
               </div>
             )}
             {images.length === 2 && <button onClick={processImages} className="w-full bg-green-600 py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition-colors">Analyze Both Sides</button>}
-            <button onClick={onBack} className="mt-6 font-bold text-gray-500">Cancel</button>
+            <button 
+              onClick={() => {
+                if (images.length > 0 && !window.confirm("Discard captured images?")) return;
+                onBack();
+              }} 
+              className="mt-6 font-bold text-gray-500"
+            >
+              Cancel
+            </button>
             <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile}/>
           </>
         )}
@@ -1224,12 +1656,34 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
     const [errors, setErrors] = useState({});
     const [selectedLeads, setSelectedLeads] = useState(new Set());
     
-    // Auto-select all on first parse
+    const hasUnsavedChanges = text.trim().length > 0 || parsed.length > 0;
+    
+    // ADDED: Back button protection
+    useBackButtonHandler(
+      () => {
+        if (loading) return; // Prevent during AI processing
+        onBack();
+      },
+      hasUnsavedChanges,
+      "Discard parsed leads?"
+    );
+    
     useEffect(() => {
       if (parsed.length > 0 && selectedLeads.size === 0) {
         setSelectedLeads(new Set(parsed.map((_, i) => i)));
       }
     }, [parsed]);
+
+    // ADDED: Warn on refresh
+    useEffect(() => {
+      if (!hasUnsavedChanges) return;
+      const handleBeforeUnload = (e) => {
+        e.preventDefault();
+        e.returnValue = '';
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     const handleAI = async () => { 
       if(!text) return; 
@@ -1298,7 +1752,16 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
     if(parsed.length > 0) return (
       <div className="h-screen flex flex-col bg-gray-50">
         <div className="p-4 bg-white border-b flex justify-between items-center shadow-sm sticky top-0 z-10">
-          <button onClick={() => setParsed([])} className="text-gray-500 flex items-center gap-1"><ArrowLeft size={16}/> Retry</button>
+          <button 
+            onClick={() => {
+              if (window.confirm("Discard parsed leads?")) {
+                setParsed([]);
+              }
+            }} 
+            className="text-gray-500 flex items-center gap-1"
+          >
+            <ArrowLeft size={16}/> Retry
+          </button>
           <h2 className="font-bold text-gray-800">
             {selectedLeads.size} of {parsed.length} Selected
           </h2>
@@ -1382,7 +1845,15 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
     
     return (
       <div className="h-screen bg-white p-6 flex flex-col">
-        <button onClick={onBack} className="mb-4 text-gray-500"><ArrowLeft/></button>
+        <button 
+          onClick={() => {
+            if (hasUnsavedChanges && !window.confirm("Discard text?")) return;
+            onBack();
+          }} 
+          className="mb-4 text-gray-500"
+        >
+          <ArrowLeft/>
+        </button>
         <h1 className="text-2xl font-black mb-2 text-gray-800">AI Paste</h1>
         <p className="text-gray-500 mb-4 text-sm">Paste messy text, Excel rows, or WhatsApp forwards here.</p>
         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="e.g. John 9888822222..." className="flex-1 bg-gray-50 p-4 rounded-xl mb-4 resize-none outline-none border focus:border-blue-500 transition-colors"/>
@@ -1392,131 +1863,201 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
 }
 
 function ManualForm({ prefill, onBack, onSubmit }) {
-    const initialState = { 
-      name: '', 
-      phone: '', 
-      email: '', 
-      company: '', 
-      website: '', 
-      designation: '', 
-      context: '' 
-    };
-    
-    const [form, setForm] = useState(prefill || initialState); 
-    const [listening, setListening] = useState(false);
-    const [errors, setErrors] = useState({});
-    const [submitting, setSubmitting] = useState(false);
-    
-    // Reset form when prefill changes
-    useEffect(() => {
-      if (prefill) {
-        setForm(prefill);
-      }
-    }, [prefill]);
-    
-    const toggleMic = () => { 
-      if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported"); 
-      const recognition = new window.webkitSpeechRecognition(); 
-      recognition.onstart = () => setListening(true); 
-      recognition.onend = () => setListening(false); 
-      recognition.onresult = (e) => setForm(f => ({...f, context: f.context + " " + e.results[0][0].transcript})); 
-      recognition.start(); 
-    };
+  const initialState = { 
+    name: '', 
+    phone: '', 
+    email: '', 
+    company: '', 
+    website: '', 
+    designation: '', 
+    context: '' 
+  };
+  
+  const [form, setForm] = useState(initialState); 
+  const [listening, setListening] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  
+  const hasUnsavedChanges = useUnsavedChanges(form, initialState);
+  
+  useBackButtonHandler(
+    () => {
+      if (submitting) return;
+      onBack();
+    },
+    hasUnsavedChanges,
+    "You have unsaved changes. Discard?"
+  );
+  
+  useEffect(() => {
+    if (prefill) {
+      setForm(prefill);
+    }
+  }, []);
+  
+  const toggleMic = () => { 
+    if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported"); 
+    const recognition = new window.webkitSpeechRecognition(); 
+    recognition.onstart = () => setListening(true); 
+    recognition.onend = () => setListening(false); 
+    recognition.onresult = (e) => setForm(f => ({...f, context: f.context + " " + e.results[0][0].transcript})); 
+    recognition.start(); 
+  };
 
-    const validatePhone = (phone) => {
-      const cleaned = String(phone).replace(/\D/g, '');
-      return cleaned.length >= 10 && cleaned.length <= 13;
-    };
+  const validatePhone = (phone) => {
+    const cleaned = String(phone).replace(/\D/g, '');
+    return cleaned.length >= 10 && cleaned.length <= 13;
+  };
 
-    const handleSubmit = async () => {
-      const newErrors = {};
-      if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
-      if (!validatePhone(form.phone)) newErrors.phone = "Invalid phone number (10-13 digits)";
-      if (form.email && !validateEmail(form.email)) newErrors.email = "Invalid email format";
+  const handleSubmit = async () => {
+    const newErrors = {};
+    if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
+    if (!validatePhone(form.phone)) newErrors.phone = "Invalid phone number (10-13 digits)";
+    if (form.email && !validateEmail(form.email)) newErrors.email = "Invalid email format";
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await onSubmit(form);
+      setForm(initialState);
+      setErrors({});
+      vibrate(100);
+    } catch (e) {
+      alert("Failed to save lead");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+  
+  return (
+    <div className="p-6 bg-white h-screen overflow-y-auto">
+      <button 
+        onClick={() => {
+          if (submitting) return;
+          if (hasUnsavedChanges && !window.confirm("Discard unsaved changes?")) return;
+          onBack();
+        }} 
+        className="mb-6 text-gray-500 flex items-center gap-2"
+        aria-label="Go back to menu"
+      >
+        <ArrowLeft/> 
+        {hasUnsavedChanges && <span className="text-orange-600 text-xs font-bold">• Unsaved</span>}
+      </button>
       
-      if (Object.keys(newErrors).length > 0) {
-        setErrors(newErrors);
-        return;
-      }
-      
-      setSubmitting(true);
-      try {
-        await onSubmit(form);
-        // Reset form after successful submission
-        setForm(initialState);
-        setErrors({});
-        vibrate(100);
-      } catch (e) {
-        alert("Failed to save lead");
-      } finally {
-        setSubmitting(false);
-      }
-    };
-    
-    return (
-      <div className="p-6 bg-white h-screen overflow-y-auto">
-        <button onClick={onBack} className="mb-6 text-gray-500"><ArrowLeft/></button>
-        <h1 className="text-2xl font-bold mb-6 text-gray-800">Add Lead</h1>
-        <div className="space-y-4">
-          <div>
-            <input 
-              value={form.name} 
-              onChange={e=>{setForm({...form, name: e.target.value});setErrors(prev=>({...prev,name:null}))}} 
-              placeholder="Name *" 
-              className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.name ? 'border-red-500 bg-red-50' : ''}`}
-            />
-            {errors.name && <p className="text-red-600 text-xs mt-1 ml-2">{errors.name}</p>}
-          </div>
-          
-          <div>
-            <input 
-              value={form.phone} 
-              onChange={e=>{setForm({...form, phone: e.target.value});setErrors(prev=>({...prev,phone:null}))}} 
-              placeholder="Phone * (10 digits)" 
-              type="tel"
-              className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.phone ? 'border-red-500 bg-red-50' : ''}`}
-            />
-            {errors.phone && <p className="text-red-600 text-xs mt-1 ml-2">{errors.phone}</p>}
-          </div>
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">Add Lead</h1>
+      <div className="space-y-4">
+        <div>
+          <input 
+            value={form.name}
+            onChange={e => {
+              setForm({...form, name: e.target.value});
+              setErrors(prev => ({...prev, name: null}));
+            }}
+            placeholder="Name *"
+            className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.name ? 'border-red-500 bg-red-50' : ''}`}
+            aria-label="Lead name"
+          />
+          {errors.name && <p className="text-red-600 text-xs mt-1 ml-2">{errors.name}</p>}
+        </div>
+        
+        <div>
+          <input 
+            value={form.phone} 
+            onChange={e => {
+              setForm({...form, phone: e.target.value});
+              setErrors(prev => ({...prev, phone: null}));
+            }} 
+            placeholder="Phone * (10 digits)" 
+            type="tel"
+            className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.phone ? 'border-red-500 bg-red-50' : ''}`}
+            aria-label="Lead phone number"
+          />
+          {errors.phone && <p className="text-red-600 text-xs mt-1 ml-2">{errors.phone}</p>}
+        </div>
 
-          <div>
-            <input 
-              value={form.email||""} 
-              onChange={e=>{setForm({...form, email: e.target.value});setErrors(prev=>({...prev,email:null}))}} 
-              placeholder="Email (optional)" 
-              type="email"
-              className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.email ? 'border-red-500 bg-red-50' : ''}`}
-            />
-            {errors.email && <p className="text-red-600 text-xs mt-1 ml-2">{errors.email}</p>}
-          </div>
+        <div>
+          <input 
+            value={form.email || ""} 
+            onChange={e => {
+              setForm({...form, email: e.target.value});
+              setErrors(prev => ({...prev, email: null}));
+            }} 
+            placeholder="Email (optional)" 
+            type="email"
+            className={`w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 ${errors.email ? 'border-red-500 bg-red-50' : ''}`}
+            aria-label="Lead email address"
+          />
+          {errors.email && <p className="text-red-600 text-xs mt-1 ml-2">{errors.email}</p>}
+        </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <input value={form.company||""} onChange={e=>setForm({...form, company: e.target.value})} placeholder="Company" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-            <input value={form.website||""} onChange={e=>setForm({...form, website: e.target.value})} placeholder="Website" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-          </div>
-          
-          <input value={form.designation||""} onChange={e=>setForm({...form, designation: e.target.value})} placeholder="Designation (e.g. Sales Manager)" className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"/>
-          
-          <div className="relative">
-            <textarea 
-              value={form.context||""} 
-              onChange={e=>setForm({...form, context: e.target.value})} 
-              placeholder="Notes / Context" 
-              className="w-full p-4 pr-12 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 min-h-[100px] resize-none"
-            />
-            <button onClick={toggleMic} className={`absolute right-2 top-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}><Mic size={20}/></button>
-          </div>
-          
+        <div className="grid grid-cols-2 gap-2">
+          <input 
+            value={form.company || ""} 
+            onChange={e => setForm({...form, company: e.target.value})} 
+            placeholder="Company" 
+            className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"
+            aria-label="Company name"
+          />
+          <input 
+            value={form.website || ""} 
+            onChange={e => setForm({...form, website: e.target.value})} 
+            placeholder="Website" 
+            className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"
+            aria-label="Company website"
+          />
+        </div>
+        
+        <input 
+          value={form.designation || ""} 
+          onChange={e => setForm({...form, designation: e.target.value})} 
+          placeholder="Designation (e.g. Sales Manager)" 
+          className="w-full p-4 bg-gray-50 rounded-xl border outline-none focus:border-blue-500"
+          aria-label="Job designation"
+        />
+        
+        <div className="relative">
+          <textarea 
+            value={form.context || ""} 
+            onChange={e => setForm({...form, context: e.target.value})} 
+            placeholder="Notes / Context" 
+            className="w-full p-4 pr-12 bg-gray-50 rounded-xl border outline-none focus:border-blue-500 min-h-[100px] resize-none"
+            aria-label="Notes and context about the lead"
+          />
           <button 
-            onClick={handleSubmit} 
-            disabled={submitting}
-            className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
->
-{submitting ? "Saving..." : "Save to Queue"}
-</button>
-</div>
-</div>
-);
+            onClick={toggleMic} 
+            className={`absolute right-2 top-2 p-2 rounded-full ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 text-gray-600'}`}
+            aria-label={listening ? "Recording voice input" : "Start voice input"}
+          >
+            <Mic size={20}/>
+          </button>
+        </div>
+        
+        <button 
+          onClick={handleSubmit} 
+          disabled={submitting}
+          className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Saving..." : "Save to Queue"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function SettingsForm({ template, setTemplate, library, setLibrary, userProfile, setUserProfile, clientId, onBack, onLogout }) {
