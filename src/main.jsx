@@ -17,7 +17,8 @@ import {
   ThumbsUp, Snowflake, Camera, Mic, LogOut, 
   Share2, Users, RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle,
   LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck, Mail, Globe, Building2,
-  CheckSquare, Tag, Send, Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, AlertTriangle, CreditCard, Sparkles
+  CheckSquare, Tag, Send, Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, 
+  AlertTriangle, CreditCard, Sparkles, TrendingUp, Download, Pause
 } from 'lucide-react';
 
 // --- MEMORY LEAK FIX ---
@@ -110,7 +111,7 @@ async function signedRequest(action, payload) {
   return requestPromise;
 }
 
-// Add after the existing utility functions
+// NEW UTILITY FUNCTIONS
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -124,9 +125,58 @@ function debounce(func, wait) {
 }
 
 function validateEmail(email) {
-  if (!email) return true; // Optional field
+  if (!email) return true;
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(email);
+}
+
+function validateAICardData(data) {
+  if (!data.phone || String(data.phone).replace(/\D/g, '').length < 6) {
+    return { valid: false, error: "Invalid or missing phone number" };
+  }
+  
+  if (!data.name || String(data.name).length < 2) {
+    return { valid: false, error: "Invalid or missing name" };
+  }
+  
+  const phoneDigits = String(data.phone).replace(/\D/g, '');
+  if (/(\d)\1{5,}/.test(phoneDigits)) {
+    return { valid: false, error: "Phone number appears invalid (repeated digits)" };
+  }
+  
+  const lowercaseName = String(data.name).toLowerCase();
+  const placeholders = ['john doe', 'jane doe', 'sample', 'example', 'test', 'card holder', 'name', 'customer'];
+  if (placeholders.some(p => lowercaseName.includes(p))) {
+    return { valid: false, warning: "Name appears generic - please verify" };
+  }
+  
+  return { valid: true };
+}
+
+function exportToCSV(data, filename) {
+  const headers = ['Name', 'Phone', 'Email', 'Company', 'Designation', 'Website', 'Context', 'Tags', 'Status'];
+  const rows = data.map(d => [
+    d.name || '',
+    d.phone || '',
+    d.email || '',
+    d.company || '',
+    d.designation || '',
+    d.website || '',
+    d.context || '',
+    d.tags || '',
+    d.status || 'PENDING'
+  ]);
+  
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
 }
 
 // --- BACK BUTTON & NAVIGATION PROTECTION ---
@@ -142,7 +192,6 @@ function useBackButtonHandler(onBack, shouldWarn = false, warningMessage = "Disc
       onBack();
     };
 
-    // Push initial state
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
 
@@ -152,7 +201,6 @@ function useBackButtonHandler(onBack, shouldWarn = false, warningMessage = "Disc
   }, [onBack, shouldWarn, warningMessage]);
 }
 
-// Detect if form has unsaved changes
 function useUnsavedChanges(currentData, initialData) {
   return JSON.stringify(currentData) !== JSON.stringify(initialData);
 }
@@ -337,6 +385,230 @@ function EditLeadModal({ lead, onSave, onClose }) {
   );
 }
 
+function AnalyticsScreen({ clientId, queue, onBack }) {
+  const [stats, setStats] = useState({
+    total: 0,
+    sent: 0,
+    pending: 0,
+    hot: 0,
+    interested: 0,
+    noAnswer: 0,
+    conversionRate: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const calculateStats = () => {
+      setLoading(true);
+      
+      try {
+        const total = queue.length;
+        const sent = queue.filter(l => l.status && l.status !== 'PENDING').length;
+        const pending = queue.filter(l => !l.status || l.status === 'PENDING').length;
+        const hot = queue.filter(l => l.tags && l.tags.toLowerCase().includes('hot')).length;
+        const interested = queue.filter(l => l.outcome && l.outcome.toLowerCase().includes('interested')).length;
+        const noAnswer = queue.filter(l => l.outcome && l.outcome.toLowerCase().includes('no answer')).length;
+        
+        const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
+
+        setStats({
+          total,
+          sent,
+          pending,
+          hot,
+          interested,
+          noAnswer,
+          conversionRate
+        });
+      } catch (e) {
+        console.error("Stats calculation failed:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    calculateStats();
+  }, [queue]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="bg-white p-4 border-b shadow-sm sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <ArrowLeft/>
+          </button>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <TrendingUp className="text-blue-600"/> Analytics
+          </h1>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Key Metrics Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <p className="text-gray-500 text-xs uppercase font-bold mb-1">Total Leads</p>
+            <p className="text-4xl font-black text-gray-900">{stats.total}</p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+              <ListIcon size={12}/>
+              <span>In database</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <p className="text-gray-500 text-xs uppercase font-bold mb-1">Contacted</p>
+            <p className="text-4xl font-black text-green-600">{stats.sent}</p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+              <CheckCircle2 size={12}/>
+              <span>Reached out</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <p className="text-gray-500 text-xs uppercase font-bold mb-1">Pending</p>
+            <p className="text-4xl font-black text-orange-600">{stats.pending}</p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-orange-600">
+              <AlertTriangle size={12}/>
+              <span>Not contacted</span>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <p className="text-gray-500 text-xs uppercase font-bold mb-1">Hot Leads</p>
+            <p className="text-4xl font-black text-red-600">{stats.hot}</p>
+            <div className="mt-2 flex items-center gap-1 text-xs text-red-600">
+              <Flame size={12}/>
+              <span>Priority</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Conversion Rate Card */}
+        {stats.total > 0 && (
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-2xl shadow-xl text-white">
+            <h3 className="font-bold mb-4 flex items-center gap-2">
+              <BarChart3 size={20}/>
+              Conversion Rate
+            </h3>
+            
+            <div className="mb-4">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-6xl font-black">{stats.conversionRate}%</span>
+                <span className="text-blue-100 text-sm">{stats.interested} / {stats.total}</span>
+              </div>
+              
+              <div className="h-3 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-white transition-all duration-500 rounded-full"
+                  style={{ width: `${stats.conversionRate}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <p className="text-blue-100 text-sm">
+              {stats.interested} leads showed interest out of {stats.total} total
+            </p>
+          </div>
+        )}
+
+        {/* Outcome Breakdown */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="font-bold mb-4 text-gray-900">Outcome Breakdown</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                  <ThumbsUp size={18} className="text-white"/>
+                </div>
+                <span className="font-bold text-gray-700">Interested</span>
+              </div>
+              <span className="text-2xl font-black text-green-600">{stats.interested}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center">
+                  <Phone size={18} className="text-white"/>
+                </div>
+                <span className="font-bold text-gray-700">No Answer</span>
+              </div>
+              <span className="text-2xl font-black text-gray-600">{stats.noAnswer}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                  <AlertTriangle size={18} className="text-white"/>
+                </div>
+                <span className="font-bold text-gray-700">Not Contacted</span>
+              </div>
+              <span className="text-2xl font-black text-orange-600">{stats.pending}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Performance Tips */}
+        <div className="bg-blue-50 border-2 border-blue-200 p-5 rounded-2xl">
+          <h3 className="font-bold mb-3 text-blue-900 flex items-center gap-2">
+            <Sparkles size={18}/>
+            Performance Tips
+          </h3>
+          
+          <ul className="space-y-2 text-sm text-blue-800">
+            {stats.pending > stats.sent && (
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 mt-0.5">•</span>
+                <span>You have {stats.pending} leads waiting. Start calling to boost your stats!</span>
+              </li>
+            )}
+            
+            {stats.conversionRate < 20 && stats.total > 10 && (
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 mt-0.5">•</span>
+                <span>Try refining your pitch. Industry average is 20-30% conversion.</span>
+              </li>
+            )}
+            
+            {stats.hot > 0 && (
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 mt-0.5">•</span>
+                <span>You have {stats.hot} hot leads! Prioritize these for quick wins.</span>
+              </li>
+            )}
+
+            {stats.conversionRate >= 30 && (
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 mt-0.5">•</span>
+                <span>🎉 Excellent conversion rate! Keep up the great work!</span>
+              </li>
+            )}
+          </ul>
+        </div>
+
+        {/* Empty State */}
+        {stats.total === 0 && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
+              <TrendingUp size={32} className="text-gray-400"/>
+            </div>
+            <h3 className="font-bold text-gray-700 mb-2">No Data Yet</h3>
+            <p className="text-gray-500 text-sm">Add some leads to see your analytics!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [view, setView] = useState("loader");
   const [clientId, setClientId] = useState(null);
@@ -367,6 +639,24 @@ function App() {
       if (refParam) sessionStorage.setItem('referrer_id', refParam);
       const pathSlug = window.location.pathname.replace('/', '');
       
+      // FIXED: Always show landing page unless explicit access params
+      const hasExplicitAccess = keyParam || slugParam || (pathSlug && pathSlug.length > 2);
+      
+      if (!hasExplicitAccess) {
+        const stored = safeStorage.getItem("thrivoy_client_id");
+        const hasAuth = stored ? safeStorage.getItem(`thrivoy_auth_${stored}`) : null;
+        
+        // Only skip landing if user has BOTH stored ID and valid auth
+        if (stored && hasAuth) {
+          setClientId(stored);
+          setView("menu");
+          return;
+        }
+        
+        setView("landing");
+        return;
+      }
+      
       if (keyParam) {
         setClientId(keyParam);
         safeStorage.setItem("thrivoy_client_id", keyParam);
@@ -385,14 +675,7 @@ function App() {
             setPublicProfile(json.data);
             setView("public_card");
           } else {
-            const stored = safeStorage.getItem("thrivoy_client_id");
-            if (stored) {
-              setClientId(stored);
-              const hasAuth = safeStorage.getItem(`thrivoy_auth_${stored}`);
-              setView(hasAuth ? "menu" : "pin_check");
-            } else {
-              setView("landing");
-            }
+            setView("landing");
           }
         } catch (e) {
           setView("landing");
@@ -400,22 +683,14 @@ function App() {
         return;
       }
 
-      const stored = safeStorage.getItem("thrivoy_client_id");
-      if (stored) {
-        setClientId(stored);
-        const hasAuth = safeStorage.getItem(`thrivoy_auth_${stored}`);
-        setView(hasAuth ? "menu" : "pin_check");
-      } else {
-        setView("landing");
-      }
+      setView("landing");
     };
     init();
   }, []);
 
   useEffect(() => {
     if (clientId && view === 'menu' && clientId !== ADMIN_KEY) {
-      // FIXED: Force fresh fetch on menu view
-      requestCache.clear(); // Clear all cached requests
+      requestCache.clear();
       fetchQueue(clientId);
       
       signedRequest("GET_CLIENT_PROFILE", { client_id: clientId })
@@ -441,7 +716,6 @@ function App() {
     setLoading(true);
     setLoadingMessage("Loading queue...");
     
-    // FIXED: Clear cache for this specific request
     const cacheKey = JSON.stringify({ action: "GET_QUEUE", payload: { client_id: id } });
     requestCache.delete(cacheKey);
     
@@ -673,17 +947,24 @@ function App() {
         />
       )}
       
+      {view === "analytics" && (
+        <AnalyticsScreen 
+          clientId={clientId}
+          queue={queue}
+          onBack={() => setView("menu")}
+        />
+      )}
+      
       {view === "help" && <HelpScreen onBack={() => setView("menu")} />}
     </>
   );
 }
 
 function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, clientId, onBulkSubmit, userProfile }) {
-  // Add auto-refresh on mount and when returning from other views
   useEffect(() => {
     const interval = setInterval(() => {
       if (clientId !== ADMIN_KEY) onRefresh();
-    }, 30000); // Refresh every 30 seconds
+    }, 30000);
     return () => clearInterval(interval);
   }, [clientId, onRefresh]);
 
@@ -705,10 +986,20 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
                context: "Imported from Phonebook" 
              }));
              await onBulkSubmit(formatted);
-             onRefresh(); // Refresh after import
+             onRefresh();
           }
        } catch (ex) { console.log(ex); }
     } else alert("Use 'AI Paste' for non-mobile devices.");
+  };
+
+  const handleExport = () => {
+    if (queue.length === 0) {
+      alert("No leads to export");
+      return;
+    }
+    exportToCSV(queue, `thrivoy_leads_${clientId}`);
+    vibrate(100);
+    alert("CSV downloaded!");
   };
 
   const usage = queue.length;
@@ -717,7 +1008,6 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-safe">
-      {/* Rest of component stays the same */}
       <header className="bg-white p-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
           <h1 className="font-bold text-xl flex items-center gap-2 text-gray-800">
               <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center font-black">T</div> Thrivoy
@@ -728,8 +1018,8 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
               <button onClick={() => onViewChange("settings")} className="p-2 rounded-full bg-gray-100"><Settings size={20}/></button>
           </div>
       </header>
+      
       <main className="p-4 space-y-4 animate-in fade-in">
-         {/* UPGRADE BANNER */}
          {isFree && usage >= 40 && (
           <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 p-4 rounded-2xl shadow-lg animate-pulse">
             <div className="flex items-center gap-3 mb-2">
@@ -746,6 +1036,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
             </button>
           </div>
          )}
+         
          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-xl shadow-blue-200 flex justify-between items-center relative overflow-hidden">
             <div className="relative z-10"><p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p><p className="text-4xl font-black mt-1">{stats.today}</p></div>
             <div className="bg-white/20 p-3 rounded-xl relative z-10"><Zap size={24} fill="currentColor"/></div>
@@ -763,6 +1054,14 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
              <ChevronRight size={20} className="text-gray-300"/>
          </button>
 
+         <button onClick={() => onViewChange("analytics")} className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors">
+             <div className="flex items-center gap-3">
+                 <div className="bg-purple-100 text-purple-600 p-2 rounded-lg"><TrendingUp size={20}/></div>
+                 <div className="text-left"><p className="font-bold text-gray-800">Analytics</p><p className="text-xs text-gray-500">View your stats</p></div>
+             </div>
+             <ChevronRight size={20} className="text-gray-300"/>
+         </button>
+
          <div className="grid grid-cols-2 gap-4">
              <button onClick={() => onViewChange("camera")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform"><Camera size={28} className="text-purple-500"/><span className="font-bold text-sm text-gray-700">Scan Card</span></button>
              <button onClick={() => onViewChange("bulk")} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform"><Wand2 size={28} className="text-pink-500"/><span className="font-bold text-sm text-gray-700">AI Paste</span></button>
@@ -776,6 +1075,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
 
          <div className="flex gap-2">
              <label className="flex-1 bg-gray-100 p-3 rounded-xl text-center text-xs font-bold text-gray-500 cursor-pointer hover:bg-gray-200 flex items-center justify-center gap-2"><Upload size={16}/> Upload CSV <input type="file" accept=".csv" onChange={onUpload} className="hidden"/></label>
+             <button onClick={handleExport} className="flex-1 bg-green-100 text-green-700 p-3 rounded-xl text-center text-xs font-bold hover:bg-green-200 flex items-center justify-center gap-2"><Download size={16}/> Export CSV</button>
              <button onClick={() => onViewChange("help")} className="bg-gray-100 p-3 rounded-xl text-gray-500"><HelpCircle size={16}/></button>
          </div>
 
@@ -1115,6 +1415,26 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     return tpl.replace("{{name}}", lead.name).replace("{{context}}", ctx);
   }, [template, library]);
 
+  // Check for saved position on mount
+  useEffect(() => {
+    const savedPosition = safeStorage.getItem(`queue_position_${clientId}`);
+    if (savedPosition && !initialLead) {
+      try {
+        const { leadId, timestamp } = JSON.parse(savedPosition);
+        
+        if (Date.now() - timestamp < 7200000) {
+          const resumeLead = queue.find(l => l.lead_id === leadId);
+          if (resumeLead && window.confirm("Resume from where you left off?")) {
+            setActive(resumeLead);
+            safeStorage.removeItem(`queue_position_${clientId}`);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to restore position:", e);
+      }
+    }
+  }, [queue, clientId, initialLead]);
+
   useEffect(() => {
     if (!active) return;
     const cachedMsg = msgCache[active.lead_id];
@@ -1184,6 +1504,20 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
       setIsProcessing(false);
     }
     setLastAction(null);
+  };
+
+  const handlePause = () => {
+    const position = {
+      leadId: active.lead_id,
+      timestamp: Date.now(),
+      queueSnapshot: queue.map(l => l.lead_id)
+    };
+    
+    safeStorage.setItem(`queue_position_${clientId}`, JSON.stringify(position));
+    
+    if (window.confirm("Pause calling? You can resume anytime from the menu.")) {
+      onBack();
+    }
   };
 
   const handleAction = async (type) => {
@@ -1267,7 +1601,6 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         )}
       </AnimatePresence>
 
-      {/* Processing overlay */}
       {isProcessing && (
         <div className="absolute inset-0 bg-black/20 z-40 flex items-center justify-center">
           <div className="bg-white rounded-2xl p-4 shadow-xl">
@@ -1290,6 +1623,15 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         >
           <ArrowLeft/>
         </button>
+        
+        <button 
+          onClick={handlePause}
+          className="p-2 bg-orange-100 text-orange-600 rounded-full shadow-sm hover:bg-orange-200"
+          aria-label="Pause calling queue"
+        >
+          <Pause size={20}/>
+        </button>
+        
         <div className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm text-gray-500">
           {queue.findIndex(l => l.lead_id === active.lead_id) + 1} / {queue.length}
         </div>
@@ -1505,7 +1847,6 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
     const [scanning, setScanning] = useState(false);
     const [scanResult, setScanResult] = useState(null);
     
-    // ADDED: Prevent back during scanning
     useBackButtonHandler(
       () => {
         if (scanning) {
@@ -1538,19 +1879,29 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
       reader.readAsDataURL(file); 
     };
     
-    const processImages = () => { 
+    const processImages = async () => { 
       setScanning(true); 
-      signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, images }).then(r => r.json()).then(res => { 
-        setScanning(false); 
-        if(res.data) {
-          setScanResult(res.data);
+      
+      try {
+        const res = await signedRequest("AI_ANALYZE_IMAGE", { client_id: clientId, images });
+        const json = await res.json();
+        
+        if (json.status === 'success' && json.data) {
+          const validation = validateAICardData(json.data);
+          
+          if (!validation.valid) {
+            alert(`⚠️ Card scan issue: ${validation.error || validation.warning}\n\nPlease verify the data carefully or try scanning again.`);
+          }
+          
+          setScanResult({ ...json.data, hasWarning: !!validation.warning });
         } else {
-          alert("Could not read card"); 
+          alert("Could not read card. Try better lighting or manual entry."); 
         }
-      }).catch(err => {
-        setScanning(false);
+      } catch (err) {
         alert("Scan failed: " + err.message);
-      }); 
+      } finally {
+        setScanning(false);
+      }
     };
 
     const handleScanAnother = () => {
@@ -1577,6 +1928,13 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
             
             <h2 className="text-2xl font-bold mb-2 text-gray-900">Card Scanned!</h2>
             <p className="text-gray-500 mb-8 text-center">Review the extracted information</p>
+            
+            {scanResult.hasWarning && (
+              <div className="w-full max-w-sm bg-yellow-100 border-l-4 border-yellow-500 p-3 mb-4 rounded">
+                <p className="text-sm text-yellow-800 font-bold">⚠️ Please verify this data</p>
+                <p className="text-xs text-yellow-700">AI detected potentially generic information</p>
+              </div>
+            )}
             
             <div className="w-full max-w-sm bg-gray-50 rounded-2xl p-6 mb-6 space-y-3">
               <div><span className="text-xs text-gray-500 uppercase font-bold">Name</span><p className="font-bold text-lg">{scanResult.name}</p></div>
@@ -1877,6 +2235,7 @@ function ManualForm({ prefill, onBack, onSubmit }) {
   const [listening, setListening] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [phoneType, setPhoneType] = useState('mobile');
   
   const hasUnsavedChanges = useUnsavedChanges(form, initialState);
   
@@ -1894,6 +2253,15 @@ function ManualForm({ prefill, onBack, onSubmit }) {
       setForm(prefill);
     }
   }, []);
+
+  useEffect(() => {
+    const digits = String(form.phone).replace(/\D/g, '');
+    if (digits.startsWith('0') && digits.length === 11) {
+      setPhoneType('landline');
+    } else {
+      setPhoneType('mobile');
+    }
+  }, [form.phone]);
   
   const toggleMic = () => { 
     if (!('webkitSpeechRecognition' in window)) return alert("Voice not supported"); 
@@ -1909,6 +2277,19 @@ function ManualForm({ prefill, onBack, onSubmit }) {
     return cleaned.length >= 10 && cleaned.length <= 13;
   };
 
+  const checkDuplicate = async (phone) => {
+    try {
+      const res = await signedRequest("CHECK_DUPLICATE", {
+        client_id: window.clientId || safeStorage.getItem("thrivoy_client_id"),
+        phone: phone
+      });
+      const json = await res.json();
+      return json.exists;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const handleSubmit = async () => {
     const newErrors = {};
     if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
@@ -1918,6 +2299,13 @@ function ManualForm({ prefill, onBack, onSubmit }) {
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
+    }
+    
+    const isDuplicate = await checkDuplicate(form.phone);
+    if (isDuplicate) {
+      if (!window.confirm("⚠️ This number already exists in your queue. Add anyway?")) {
+        return;
+      }
     }
     
     setSubmitting(true);
@@ -1989,6 +2377,23 @@ function ManualForm({ prefill, onBack, onSubmit }) {
             aria-label="Lead phone number"
           />
           {errors.phone && <p className="text-red-600 text-xs mt-1 ml-2">{errors.phone}</p>}
+          
+          <div className="flex gap-2 mt-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setPhoneType('mobile')}
+              className={`px-3 py-1 rounded-lg transition-colors ${phoneType === 'mobile' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}
+            >
+              📱 Mobile
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhoneType('landline')}
+              className={`px-3 py-1 rounded-lg transition-colors ${phoneType === 'landline' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}
+            >
+              ☎️ Landline
+            </button>
+          </div>
         </div>
 
         <div>
@@ -2490,10 +2895,58 @@ function AdminLogin({ onLogin }) {
 }
 
 function LandingPage() {
+  const [loading, setLoading] = useState(false);
+
   const handleLogin = (e) => {
     e.preventDefault();
     const k = e.target.key.value;
     if(k) window.location.search = `?key=${k}`;
+  };
+
+  const handleQuickStart = async () => {
+    if (!window.confirm("Create instant free account? You'll get your credentials immediately.")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const tempName = `User_${Math.random().toString(36).substr(2, 6)}`;
+      const res = await signedRequest("ADD_CLIENT", {
+        admin_key: "QUICK_START",
+        client_id: ADMIN_KEY,
+        name: tempName,
+        phone: "0000000000",
+        plan: "Free"
+      });
+      
+      const json = await res.json();
+      if (json.status === 'success') {
+        const { key, pin } = json.data;
+        
+        // Store credentials
+        safeStorage.setItem("thrivoy_client_id", key);
+        
+        // Show credentials in a better modal
+        const credentialsMsg = `🎉 Account Created Successfully!\n\n` +
+                              `SAVE THESE CREDENTIALS:\n\n` +
+                              `🔑 Access Key: ${key}\n` +
+                              `🔐 PIN: ${pin}\n\n` +
+                              `You'll need these to login.\n` +
+                              `Screenshot this message!`;
+        
+        alert(credentialsMsg);
+        
+        // Redirect to login with key
+        window.location.search = `?key=${key}`;
+      } else {
+        alert("Quick start failed: " + (json.message || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Quick start failed. Please try again or use manual signup.");
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const scrollToLogin = () => {
@@ -2507,6 +2960,16 @@ function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100">
       
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent"></div>
+            <p className="font-bold text-gray-900 text-center">Creating your account...</p>
+            <p className="text-sm text-gray-500 text-center">This will only take a moment</p>
+          </div>
+        </div>
+      )}
+
       <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-black text-xl tracking-tight">
@@ -2541,6 +3004,63 @@ function LandingPage() {
             Ditch the diaries and messy Excel sheets.
           </p>
 
+          {/* Quick Start Section - NEW */}
+          <div className="mb-8 max-w-md mx-auto">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                  <Zap size={24} className="text-white" fill="currentColor"/>
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-lg text-gray-900">New User?</h3>
+                  <p className="text-sm text-gray-600">Get instant access - no signup required</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleQuickStart}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    🚀 Start Free Trial Now
+                  </>
+                )}
+              </button>
+              
+              <div className="mt-3 flex items-center justify-center gap-4 text-xs text-gray-600">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-green-600"/>
+                  Instant access
+                </span>
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-green-600"/>
+                  No credit card
+                </span>
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-green-600"/>
+                  50 free leads
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Existing Login Form */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm mb-6">
+              <span className="px-4 bg-white text-gray-500 font-medium">or login with your key</span>
+            </div>
+          </div>
+
           <div id="login-form" className="scroll-mt-32 bg-white p-3 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
             <form onSubmit={handleLogin} className="flex gap-2">
               <input 
@@ -2554,7 +3074,7 @@ function LandingPage() {
             </form>
           </div>
           <p className="mt-6 text-sm text-gray-500 font-medium">
-            Don't have a key? <a href="#" className="text-blue-600 hover:underline">Request access</a>
+            Don't have a key? <a href="https://wa.me/919999999999?text=I want Thrivoy access" className="text-blue-600 hover:underline">Request access</a>
           </p>
         </div>
       </header>
@@ -2609,12 +3129,14 @@ function LandingPage() {
               <h3 className="font-bold text-lg text-gray-500 mb-2">Starter</h3>
               <div className="text-4xl font-black mb-6">Free</div>
               <ul className="space-y-4 mb-8 text-left text-sm text-gray-600">
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 50 Leads Capacity</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 100 Leads Capacity</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Basic Calling Queue</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 1 Digital Card</li>
                 <li className="flex items-center gap-2 opacity-50"><X size={16}/> No AI Rewriting</li>
               </ul>
-              <button onClick={scrollToLogin} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Try Free</button>
+              <button onClick={handleQuickStart} disabled={loading} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors disabled:opacity-50">
+                {loading ? "Creating..." : "Start Free"}
+              </button>
             </div>
 
             <div className="bg-gray-900 text-white p-8 rounded-3xl shadow-2xl relative transform scale-105 z-10">
@@ -2625,7 +3147,7 @@ function LandingPage() {
               
               <ul className="space-y-4 mb-8 text-left text-sm">
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Unlimited Leads</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Full AI Suite (Parsing + Writing)</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Full AI Suite</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Hot Lead Vault</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> WhatsApp Integration</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Priority Support</li>
@@ -2642,7 +3164,7 @@ function LandingPage() {
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Lead Distribution</li>
                 <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Performance Analytics</li>
               </ul>
-              <button onClick={scrollToLogin} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Contact Sales</button>
+              <button onClick={() => window.open("https://wa.me/919999999999?text=I want Teams plan")} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Contact Sales</button>
             </div>
 
           </div>
