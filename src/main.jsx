@@ -865,7 +865,7 @@ function App() {
       
       {view === "list" && (
         <QueueList
-          queue={queue}
+          queue={Array.isArray(queue) ? queue : []}
           onBack={() => setView("menu")}
           onSelect={(lead) => {
             setActiveLead(lead);
