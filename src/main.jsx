@@ -1021,7 +1021,8 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
     alert("CSV downloaded!");
   };
 
-  const usage = queue.length;
+  const safeQueue = Array.isArray(queue) ? queue : [];
+  const usage = safeQueue.length;
   const isFree = userProfile?.plan === "Free" || !userProfile?.plan;
   const percentUsed = (usage / 100) * 100;
 
