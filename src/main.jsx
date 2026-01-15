@@ -210,14 +210,20 @@ function useUnsavedChanges(currentData, initialData) {
 const QueueRow = ({ index, style, data }) => {
   const { queue, onSelect, selected, toggleSelect, selectionMode, onLongPress } = data;
   const lead = queue[index];
+  const [pressTimer, setPressTimer] = useState(null);
   
   // CRITICAL FIX: Safety check - ensure lead is a valid object
-  if (!lead || typeof lead !== 'object') {
-    return <div style={style} className="px-4 py-2"><div className="p-3 rounded-xl bg-gray-100 text-gray-400">Invalid lead data</div></div>;
+  if (!lead || typeof lead !== 'object' || !lead.lead_id) {
+    return (
+      <div style={style} className="px-4 py-2">
+        <div className="p-3 rounded-xl bg-gray-100 text-gray-400">
+          Invalid lead data
+        </div>
+      </div>
+    );
   }
   
   const isSelected = selected.has(lead.lead_id);
-  const [pressTimer, setPressTimer] = useState(null);
 
   const handleTouchStart = () => {
     const timer = setTimeout(() => {
