@@ -36,17 +36,35 @@ function sanitizeValue(val, type = 'string') {
     return type === 'string' ? '' : type === 'number' ? 0 : type === 'array' ? [] : {};
   }
   
-  // If it's an object but shouldn't be, stringify and extract
-  if (typeof val === 'object' && !Array.isArray(val) && type === 'string') {
-    try {
-      return JSON.stringify(val);
-    } catch {
-      return String(val);
+  // CRITICAL FIX: Handle objects more aggressively
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    if (type === 'string') {
+      try {
+        // If it has common properties, extract them
+        if (val.value !== undefined) return String(val.value);
+        if (val.text !== undefined) return String(val.text);
+        if (val.name !== undefined) return String(val.name);
+        // Otherwise stringify
+        return JSON.stringify(val);
+      } catch {
+        return '[Object]';
+      }
     }
   }
   
+  // Handle arrays for string type
+  if (Array.isArray(val) && type === 'string') {
+    return val.join(', ');
+  }
+  
   // Normal conversion
-  if (type === 'string') return String(val);
+  if (type === 'string') {
+    try {
+      return String(val);
+    } catch {
+      return '';
+    }
+  }
   if (type === 'number') return Number(val) || 0;
   if (type === 'array') return Array.isArray(val) ? val : [];
   
