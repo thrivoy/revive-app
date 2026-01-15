@@ -210,6 +210,12 @@ function useUnsavedChanges(currentData, initialData) {
 const QueueRow = ({ index, style, data }) => {
   const { queue, onSelect, selected, toggleSelect, selectionMode, onLongPress } = data;
   const lead = queue[index];
+  
+  // CRITICAL FIX: Safety check - ensure lead is a valid object
+  if (!lead || typeof lead !== 'object') {
+    return <div style={style} className="px-4 py-2"><div className="p-3 rounded-xl bg-gray-100 text-gray-400">Invalid lead data</div></div>;
+  }
+  
   const isSelected = selected.has(lead.lead_id);
   const [pressTimer, setPressTimer] = useState(null);
 
@@ -240,10 +246,10 @@ const QueueRow = ({ index, style, data }) => {
                </div>
            )}
            <div className="flex-1 min-w-0">
-               <div className="font-bold text-gray-800 truncate">{lead.name}</div>
+               <div className="font-bold text-gray-800 truncate">{String(lead.name || 'Unknown')}</div>
                <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-                  <span>{lead.phone}</span>
-                  {lead.tags && <span className="bg-purple-100 text-purple-700 px-1 rounded text-[10px] truncate max-w-[80px]">{lead.tags.split(',')[0]}</span>}
+                  <span>{String(lead.phone || '')}</span>
+                  {lead.tags && <span className="bg-purple-100 text-purple-700 px-1 rounded text-[10px] truncate max-w-[80px]">{String(lead.tags).split(',')[0]}</span>}
                </div>
            </div>
         </div>
@@ -723,11 +729,18 @@ function App() {
       const res = await signedRequest("GET_QUEUE", { client_id: id });
       const json = await res.json();
       if (json.data) {
-        setQueue(json.data.queue || []);
-        setStats(json.data.stats || { today: 0 });
+        // CRITICAL FIX: Ensure queue is always an array
+        const queueData = json.data.queue;
+        setQueue(Array.isArray(queueData) ? queueData : []);
+        
+        // CRITICAL FIX: Ensure stats is always an object with proper structure
+        const statsData = json.data.stats;
+        setStats(statsData && typeof statsData === 'object' ? { today: statsData.today || 0 } : { today: 0 });
       }
     } catch (e) {
-      console.error(e);
+      console.error("Fetch queue error:", e);
+      setQueue([]);
+      setStats({ today: 0 });
     } finally {
       setLoading(false);
       setLoadingMessage("");
