@@ -1170,6 +1170,9 @@ function QueueListSkeleton() {
 }
 
 function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, onPowerEmail, clientId, onRefresh }) {
+  // FIX: Make sure queue is always an array
+  const safeQueue = Array.isArray(queue) ? queue : [];
+  
   const [selectionMode, setSelectionMode] = useState(false); 
   const [showTagInput, setShowTagInput] = useState(false); 
   const [newTag, setNewTag] = useState("");
@@ -1181,15 +1184,15 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
 
   // Filter queue based on search
   const filteredQueue = useMemo(() => {
-    if (!searchQuery) return queue;
+    if (!searchQuery) return safeQueue;
     const q = searchQuery.toLowerCase();
-    return queue.filter(l => 
+    return safeQueue.filter(l => 
       l.name.toLowerCase().includes(q) || 
       l.phone.includes(q) ||
       (l.email && l.email.toLowerCase().includes(q)) ||
       (l.company && l.company.toLowerCase().includes(q))
     );
-  }, [queue, searchQuery]);
+  }, [safeQueue, searchQuery]);
 
   const toggleSelect = (id) => { 
       setSelectionMode(true); 
@@ -1200,7 +1203,7 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   };
 
   const handleBCCWithConfirm = () => {
-    const emailCount = queue.filter(l => selectedLeads.has(l.lead_id) && l.email).length;
+    const emailCount = safeQueue.filter(l => selectedLeads.has(l.lead_id) && l.email).length;
     if (emailCount === 0) return alert("No emails found in selection");
     
     setConfirmAction({
@@ -1212,7 +1215,7 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   };
 
   const handleBCC = () => { 
-      const emails = queue.filter(l => selectedLeads.has(l.lead_id) && l.email).map(l => l.email).join(','); 
+      const emails = safeQueue.filter(l => selectedLeads.has(l.lead_id) && l.email).map(l => l.email).join(','); 
       window.location.href = `mailto:?bcc=${emails}&subject=Update`; 
       setShowConfirm(false);
   };
