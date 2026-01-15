@@ -414,12 +414,13 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
       setLoading(true);
       
       try {
-        const total = queue.length;
-        const sent = queue.filter(l => l.status && l.status !== 'PENDING').length;
-        const pending = queue.filter(l => !l.status || l.status === 'PENDING').length;
-        const hot = queue.filter(l => l.tags && l.tags.toLowerCase().includes('hot')).length;
-        const interested = queue.filter(l => l.outcome && l.outcome.toLowerCase().includes('interested')).length;
-        const noAnswer = queue.filter(l => l.outcome && l.outcome.toLowerCase().includes('no answer')).length;
+        const safeQueue = Array.isArray(queue) ? queue : [];
+        const total = safeQueue.length;
+        const sent = safeQueue.filter(l => l.status && l.status !== 'PENDING').length;
+        const pending = safeQueue.filter(l => !l.status || l.status === 'PENDING').length;
+        const hot = safeQueue.filter(l => l.tags && l.tags.toLowerCase().includes('hot')).length;
+        const interested = safeQueue.filter(l => l.outcome && l.outcome.toLowerCase().includes('interested')).length;
+        const noAnswer = safeQueue.filter(l => l.outcome && l.outcome.toLowerCase().includes('no answer')).length;
         
         const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
 
