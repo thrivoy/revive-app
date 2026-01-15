@@ -30,6 +30,61 @@ setInterval(() => {
   }
 }, 60000);
 
+// --- UTILITY: Deep sanitization for all data ---
+function sanitizeValue(val, type = 'string') {
+  if (val === null || val === undefined) {
+    return type === 'string' ? '' : type === 'number' ? 0 : type === 'array' ? [] : {};
+  }
+  
+  // If it's an object but shouldn't be, stringify and extract
+  if (typeof val === 'object' && !Array.isArray(val) && type === 'string') {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return String(val);
+    }
+  }
+  
+  // Normal conversion
+  if (type === 'string') return String(val);
+  if (type === 'number') return Number(val) || 0;
+  if (type === 'array') return Array.isArray(val) ? val : [];
+  
+  return val;
+}
+
+function sanitizeLead(lead) {
+  if (!lead || typeof lead !== 'object') {
+    return {
+      lead_id: 'invalid_' + Date.now(),
+      name: 'Invalid Lead',
+      phone: '',
+      email: '',
+      company: '',
+      website: '',
+      designation: '',
+      context: '',
+      tags: '',
+      status: 'PENDING',
+      outcome: ''
+    };
+  }
+  
+  return {
+    lead_id: sanitizeValue(lead.lead_id, 'string') || 'lead_' + Date.now(),
+    name: sanitizeValue(lead.name, 'string') || 'Unknown',
+    phone: sanitizeValue(lead.phone, 'string') || '',
+    email: sanitizeValue(lead.email, 'string') || '',
+    company: sanitizeValue(lead.company, 'string') || '',
+    website: sanitizeValue(lead.website, 'string') || '',
+    designation: sanitizeValue(lead.designation, 'string') || '',
+    context: sanitizeValue(lead.context, 'string') || '',
+    tags: sanitizeValue(lead.tags, 'string') || '',
+    status: sanitizeValue(lead.status, 'string') || 'PENDING',
+    outcome: sanitizeValue(lead.outcome, 'string') || ''
+  };
+}
+
 // --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -212,7 +267,7 @@ const QueueRow = ({ index, style, data }) => {
   const lead = queue[index];
   const [pressTimer, setPressTimer] = useState(null);
   
-  // CRITICAL FIX: Safety check - ensure lead is a valid object
+  // ULTRA-SAFE: Triple check lead validity
   if (!lead || typeof lead !== 'object' || !lead.lead_id) {
     return (
       <div style={style} className="px-4 py-2">
@@ -223,7 +278,15 @@ const QueueRow = ({ index, style, data }) => {
     );
   }
   
-  const isSelected = selected.has(lead.lead_id);
+  // ULTRA-SAFE: Extract primitive values only
+  const safeLead = {
+    id: String(lead.lead_id || ''),
+    name: String(lead.name || 'Unknown'),
+    phone: String(lead.phone || ''),
+    tags: String(lead.tags || '')
+  };
+  
+  const isSelected = selected.has(safeLead.id);
 
   const handleTouchStart = () => {
     const timer = setTimeout(() => {
@@ -236,10 +299,13 @@ const QueueRow = ({ index, style, data }) => {
     if (pressTimer) clearTimeout(pressTimer);
   };
 
+  const tagsList = safeLead.tags ? safeLead.tags.split(',').filter(Boolean) : [];
+  const firstTag = tagsList.length > 0 ? tagsList[0].trim() : '';
+
   return (
     <div style={style} className="px-4 py-2">
       <div 
-        onClick={() => selectionMode ? toggleSelect(lead.lead_id) : onSelect(lead)} 
+        onClick={() => selectionMode ? toggleSelect(safeLead.id) : onSelect(lead)} 
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => { e.preventDefault(); if (onLongPress) onLongPress(lead); }}
@@ -247,19 +313,23 @@ const QueueRow = ({ index, style, data }) => {
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
            {selectionMode && (
-               <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
+               <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
                    {isSelected && <CheckCircle2 size={14}/>}
                </div>
            )}
            <div className="flex-1 min-w-0">
-               <div className="font-bold text-gray-800 truncate">{String(lead.name || 'Unknown')}</div>
-               <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-                  <span>{String(lead.phone || '')}</span>
-                  {lead.tags && <span className="bg-purple-100 text-purple-700 px-1 rounded text-[10px] truncate max-w-[80px]">{String(lead.tags).split(',')[0]}</span>}
+               <div className="font-bold text-gray-800 truncate">{safeLead.name}</div>
+               <div className="flex items-center gap-2 text-xs text-gray-500 font-mono flex-wrap">
+                  <span className="truncate">{safeLead.phone}</span>
+                  {firstTag && (
+                    <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] truncate max-w-[80px]">
+                      {firstTag}
+                    </span>
+                  )}
                </div>
            </div>
         </div>
-        {!selectionMode && <ChevronRight size={16} className="text-gray-300"/>}
+        {!selectionMode && <ChevronRight size={16} className="text-gray-300 flex-shrink-0"/>}
       </div>
     </div>
   );
@@ -317,7 +387,7 @@ function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel, confirmTex
 }
 
 function EditLeadModal({ lead, onSave, onClose }) {
-  const [form, setForm] = useState({ ...lead });
+  const [form, setForm] = useState({ ...sanitizeLead(lead) });
   const [errors, setErrors] = useState({});
 
   const validatePhone = (phone) => {
@@ -414,13 +484,13 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
       setLoading(true);
       
       try {
-        const safeQueue = Array.isArray(queue) ? queue : [];
+        const safeQueue = Array.isArray(queue) ? queue.map(sanitizeLead) : [];
         const total = safeQueue.length;
         const sent = safeQueue.filter(l => l.status && l.status !== 'PENDING').length;
         const pending = safeQueue.filter(l => !l.status || l.status === 'PENDING').length;
-        const hot = safeQueue.filter(l => l.tags && l.tags.toLowerCase().includes('hot')).length;
-        const interested = safeQueue.filter(l => l.outcome && l.outcome.toLowerCase().includes('interested')).length;
-        const noAnswer = safeQueue.filter(l => l.outcome && l.outcome.toLowerCase().includes('no answer')).length;
+        const hot = safeQueue.filter(l => l.tags && String(l.tags).toLowerCase().includes('hot')).length;
+        const interested = safeQueue.filter(l => l.outcome && String(l.outcome).toLowerCase().includes('interested')).length;
+        const noAnswer = safeQueue.filter(l => l.outcome && String(l.outcome).toLowerCase().includes('no answer')).length;
         
         const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
 
