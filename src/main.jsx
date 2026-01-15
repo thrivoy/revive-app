@@ -1117,7 +1117,8 @@ function AffiliateScreen({ clientId, onBack }) {
 }
 
 function PowerEmailer({ queue, selectedIds, template, onBack }) {
-    const campaignList = useMemo(() => queue.filter(l => selectedIds.has(l.lead_id) && l.email), [queue, selectedIds]);
+    const safeQueue = Array.isArray(queue) ? queue : [];
+    const campaignList = useMemo(() => safeQueue.filter(l => selectedIds.has(l.lead_id) && l.email), [safeQueue, selectedIds]);
     const [index, setIndex] = useState(0); 
     const lead = campaignList[index]; 
     const [msg, setMsg] = useState("");
@@ -1386,7 +1387,10 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
 }
 
 function CardStack({ queue, setQueue, template, library, clientId, onBack, initialLead }) {
-  const [active, setActive] = useState(initialLead || queue[0]);
+  // FIX: Make sure queue is always an array
+  const safeQueue = Array.isArray(queue) ? queue : [];
+  
+  const [active, setActive] = useState(initialLead || safeQueue[0]);
   const [msg, setMsg] = useState("");
   const [msgCache, setMsgCache] = useState({});
   const controls = useAnimation();
@@ -1406,7 +1410,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         onBack();
       }
     },
-    isProcessing || queue.length > 0,
+    isProcessing || safeQueue.length > 0,
     "Exit calling queue? Progress will be lost."
   );
 
@@ -1426,7 +1430,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         const { leadId, timestamp } = JSON.parse(savedPosition);
         
         if (Date.now() - timestamp < 7200000) {
-          const resumeLead = queue.find(l => l.lead_id === leadId);
+          const resumeLead = safeQueue.find(l => l.lead_id === leadId);
           if (resumeLead && window.confirm("Resume from where you left off?")) {
             setActive(resumeLead);
             safeStorage.removeItem(`queue_position_${clientId}`);
@@ -1436,7 +1440,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         console.error("Failed to restore position:", e);
       }
     }
-  }, [queue, clientId, initialLead]);
+  }, [safeQueue, clientId, initialLead]);
 
   useEffect(() => {
     if (!active) return;
@@ -1458,9 +1462,9 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
   }, [msg]);
 
   const next = () => {
-    const idx = queue.findIndex(l => l.lead_id === active.lead_id);
-    if (idx < queue.length - 1) {
-      setActive(queue[idx + 1]);
+    const idx = safeQueue.findIndex(l => l.lead_id === active.lead_id);
+    if (idx < safeQueue.length - 1) {
+      setActive(safeQueue[idx + 1]);
       setMode("card");
     } else {
       onBack();
@@ -1474,7 +1478,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     setLastAction({ lead: active, outcome });
     setShowUndo(true);
     setTimeout(() => setShowUndo(false), 3000);
-    setQueue(prev => prev.filter(l => l.lead_id !== active.lead_id));
+    setQueue(prev => Array.isArray(prev) ? prev.filter(l => l.lead_id !== active.lead_id) : []);
     try {
       await signedRequest("MARK_SENT", {
         client_id: clientId,
@@ -1494,7 +1498,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     setIsProcessing(true);
     vibrate(100);
     setShowUndo(false);
-    setQueue(prev => [lastAction.lead, ...prev]);
+    setQueue(prev => [lastAction.lead, ...(Array.isArray(prev) ? prev : [])]);
     try {
       await signedRequest("MARK_SENT", {
         client_id: clientId,
@@ -1513,7 +1517,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     const position = {
       leadId: active.lead_id,
       timestamp: Date.now(),
-      queueSnapshot: queue.map(l => l.lead_id)
+      queueSnapshot: safeQueue.map(l => l.lead_id)
     };
     
     safeStorage.setItem(`queue_position_${clientId}`, JSON.stringify(position));
@@ -1636,7 +1640,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         </button>
         
         <div className="text-xs font-bold bg-white px-3 py-1 rounded-full shadow-sm text-gray-500">
-          {queue.findIndex(l => l.lead_id === active.lead_id) + 1} / {queue.length}
+          {safeQueue.findIndex(l => l.lead_id === active.lead_id) + 1} / {safeQueue.length}
         </div>
       </div>
 
