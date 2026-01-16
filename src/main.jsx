@@ -121,7 +121,7 @@ class ErrorBoundary extends Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6i_sxGe5owO_tPAsN6_eABKDJw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxOngDPlaePVboF3MQPZV76Wm_ap4684yJuRrOvptq5cLiURTTx6S_jD_IZ_LBCDIgQPg/exec';
 const ADMIN_PASSWORD = 'thrivoyboss';
 const ADMIN_KEY = 'master';
 const LEAD_LIMIT = 100;
