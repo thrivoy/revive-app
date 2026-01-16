@@ -1,27 +1,22 @@
 import './index.css';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Component } from 'react';
 import { createRoot } from 'react-dom/client';
-
-// --- SAFE IMPORT FIX ---
 import * as ReactWindowPkg from 'react-window';
-const List = ReactWindowPkg.FixedSizeList || ReactWindowPkg.default?.FixedSizeList;
-
 import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
-const AutoSizer = AutoSizerPkg.default || AutoSizerPkg;
-
-import { motion, useAnimation, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import { 
-  Phone, Upload, UserPlus, ArrowLeft, Trash2, Zap, ScanLine, Settings, 
-  List as ListIcon, Plus, X, Wand2, Play, Flame, 
-  ThumbsUp, Snowflake, Camera, Mic, LogOut, 
-  Share2, Users, RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle,
-  LayoutDashboard, BarChart3, CheckCircle2, WifiOff, UserCheck, Mail, Globe, Building2,
-  CheckSquare, Tag, Send, Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, 
-  AlertTriangle, CreditCard, Sparkles, TrendingUp, Download, Pause
+  Phone, Upload, UserPlus, ArrowLeft, Trash2, Zap, ScanLine, Settings, List as ListIcon, 
+  Plus, X, Wand2, Play, Flame, ThumbsUp, Snowflake, Camera, Mic, LogOut, Share2, Users, 
+  RefreshCw, ChevronRight, Lock, Briefcase, HelpCircle, LayoutDashboard, BarChart3, 
+  CheckCircle2, WifiOff, UserCheck, Mail, Globe, Building2, CheckSquare, Tag, Send, 
+  Facebook, Linkedin, Instagram, KeyRound, Copy, DollarSign, AlertTriangle, CreditCard, 
+  Sparkles, TrendingUp, Download, Pause 
 } from 'lucide-react';
 
-// --- MEMORY LEAK FIX ---
+const FixedSizeList = ReactWindowPkg.FixedSizeList ?? ReactWindowPkg.default?.FixedSizeList;
+const AutoSizer = AutoSizerPkg.default ?? AutoSizerPkg.AutoSizer;
+
 const requestCache = new Map();
 setInterval(() => {
   const now = Date.now();
@@ -30,51 +25,33 @@ setInterval(() => {
   }
 }, 60000);
 
-// --- UTILITY: Deep sanitization for all data ---
 function sanitizeValue(val, type = 'string') {
-  if (val === null || val === undefined) {
-    return type === 'string' ? '' : type === 'number' ? 0 : type === 'array' ? [] : {};
-  }
-  
-  // CRITICAL FIX: Handle objects more aggressively
-  if (typeof val === 'object' && !Array.isArray(val)) {
-    if (type === 'string') {
-      try {
-        // If it has common properties, extract them
-        if (val.value !== undefined) return String(val.value);
-        if (val.text !== undefined) return String(val.text);
-        if (val.name !== undefined) return String(val.name);
-        // Otherwise stringify
-        return JSON.stringify(val);
-      } catch {
-        return '[Object]';
+  if (val === null || val === undefined) return '';
+  if (type === 'string') {
+    if (typeof val === 'object' && !Array.isArray(val)) {
+      if (type === 'string') {
+        try {
+          if (val.value !== undefined) return String(val.value);
+          if (val.text !== undefined) return String(val.text);
+          if (val.name !== undefined) return String(val.name);
+          return JSON.stringify(val);
+        } catch {
+          return Object.prototype.toString.call(val);
+        }
       }
     }
-  }
-  
-  // Handle arrays for string type
-  if (Array.isArray(val) && type === 'string') {
-    return val.join(', ');
-  }
-  
-  // Normal conversion
-  if (type === 'string') {
-    try {
-      return String(val);
-    } catch {
-      return '';
-    }
+    if (Array.isArray(val) && type === 'string') return val.join(', ');
+    try { return String(val); } catch { return ''; }
   }
   if (type === 'number') return Number(val) || 0;
   if (type === 'array') return Array.isArray(val) ? val : [];
-  
   return val;
 }
 
 function sanitizeLead(lead) {
   if (!lead || typeof lead !== 'object') {
     return {
-      lead_id: 'invalid_' + Date.now(),
+      leadid: 'invalid-' + Date.now(),
       name: 'Invalid Lead',
       phone: '',
       email: '',
@@ -87,36 +64,56 @@ function sanitizeLead(lead) {
       outcome: ''
     };
   }
-  
   return {
-    lead_id: sanitizeValue(lead.lead_id, 'string') || 'lead_' + Date.now(),
+    leadid: sanitizeValue(lead.leadid, 'string'),
+    lead: Date.now(),
     name: sanitizeValue(lead.name, 'string') || 'Unknown',
-    phone: sanitizeValue(lead.phone, 'string') || '',
-    email: sanitizeValue(lead.email, 'string') || '',
-    company: sanitizeValue(lead.company, 'string') || '',
-    website: sanitizeValue(lead.website, 'string') || '',
-    designation: sanitizeValue(lead.designation, 'string') || '',
-    context: sanitizeValue(lead.context, 'string') || '',
-    tags: sanitizeValue(lead.tags, 'string') || '',
+    phone: sanitizeValue(lead.phone, 'string'),
+    email: sanitizeValue(lead.email, 'string'),
+    company: sanitizeValue(lead.company, 'string'),
+    website: sanitizeValue(lead.website, 'string'),
+    designation: sanitizeValue(lead.designation, 'string'),
+    context: sanitizeValue(lead.context, 'string'),
+    tags: sanitizeValue(lead.tags, 'string'),
     status: sanitizeValue(lead.status, 'string') || 'PENDING',
-    outcome: sanitizeValue(lead.outcome, 'string') || ''
+    outcome: sanitizeValue(lead.outcome, 'string')
   };
 }
 
-// --- ERROR BOUNDARY ---
-class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, errorInfo) { console.error("Uncaught error:", error, errorInfo); }
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Uncaught error:', error, errorInfo);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gray-50">
-          <div className="bg-red-100 p-4 rounded-full text-red-600 mb-4"><WifiOff size={32}/></div>
+          <div className="bg-red-100 p-4 rounded-full text-red-600 mb-4">
+            <WifiOff size={32} />
+          </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Engine Stalled</h1>
-          <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">Something went wrong. Don't worry, your data is safe in the cloud.</p>
-          <button onClick={() => window.location.reload()} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg">Restart Engine</button>
-          <p className="mt-4 text-xs text-gray-400 font-mono">{this.state.error?.message}</p>
+          <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
+            Something went wrong. Don't worry, your data is safe in the cloud.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+          >
+            Restart Engine
+          </button>
+          <p className="mt-4 text-xs text-gray-400 font-mono">
+            {this.state.error?.message}
+          </p>
         </div>
       );
     }
@@ -124,77 +121,77 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- CONFIGURATION ---
-const API_URL = "https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6i_sxGe5owO_tPAsN6_eABKDJw/exec"; 
-const ADMIN_PASSWORD = "thrivoy_boss"; 
-const ADMIN_KEY = "master";
+const API_URL = 'https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6isxGe5owOtPAsN6eABKDJw/exec';
+const ADMIN_PASSWORD = 'thrivoyboss';
+const ADMIN_KEY = 'master';
 const LEAD_LIMIT = 100;
 
-// --- UTILS & SECURITY ---
 const safeStorage = {
-  getItem: (k) => { try { return localStorage.getItem(k); } catch(e) { return null; } },
-  setItem: (k, v) => { try { localStorage.setItem(k, v); } catch(e) {} },
-  removeItem: (k) => { try { localStorage.removeItem(k); } catch(e) {} }
+  getItem: (k) => {
+    try { return localStorage.getItem(k); } catch { return null; }
+  },
+  setItem: (k, v) => {
+    try { localStorage.setItem(k, v); } catch { }
+  },
+  removeItem: (k) => {
+    try { localStorage.removeItem(k); } catch { }
+  }
 };
-const vibrate = (ms = 50) => { if (navigator.vibrate) navigator.vibrate(ms); };
+
+const vibrate = (ms = 50) => {
+  if (navigator.vibrate) navigator.vibrate(ms);
+};
+
 const pendingRequests = new Map();
 
 async function signedRequest(action, payload) {
   const cacheKey = JSON.stringify({ action, payload });
   if (pendingRequests.has(cacheKey)) return pendingRequests.get(cacheKey);
   
-  if (requestCache.has(cacheKey) && !action.includes("MARK") && !action.includes("ADD") && !action.includes("UPDATE")) {
+  if (requestCache.has(cacheKey) && !action.includes('MARK') && !action.includes('ADD') && !action.includes('UPDATE')) {
     const cached = requestCache.get(cacheKey);
-    if (Date.now() - cached.timestamp < 5000) return Promise.resolve(new Response(JSON.stringify(cached.data)));
-    requestCache.delete(cacheKey);
+    if (Date.now() - cached.timestamp < 5000) {
+      requestCache.delete(cacheKey);
+      return Promise.resolve(new Response(JSON.stringify(cached.data)));
+    }
   }
 
   const timestamp = Date.now();
-  const clientId = payload.client_id;
-  let signature = "";
-
-  if (action !== "ADD_CLIENT" && action !== "GET_CLIENT_BY_SLUG" && action !== "VERIFY_PIN" && action !== "ADD_LEADS" && action !== "GET_REFERRAL_STATS" && clientId !== ADMIN_KEY) {
-      const secret = safeStorage.getItem(`thrivoy_secret_${clientId}`);
-      if (secret && window.crypto && crypto.subtle) {
-          try {
-            const enc = new TextEncoder();
-            const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-            const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${clientId}:${timestamp}`));
-            signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
-          } catch(e) { console.error("Signing failed", e); }
+  const clientId = payload.clientid;
+  
+  let signature = '';
+  if (action !== 'ADDCLIENT' && action !== 'GETCLIENTBYSLUG' && action !== 'VERIFYPIN' && 
+      action !== 'ADDLEADS' && action !== 'GETREFERRALSTATS' && clientId !== ADMIN_KEY) {
+    const secret = safeStorage.getItem(`thrivoysecret-${clientId}`);
+    if (secret && window.crypto?.subtle) {
+      try {
+        const enc = new TextEncoder();
+        const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+        const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${clientId}${timestamp}`));
+        signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+      } catch (e) {
+        console.error('Signing failed', e);
       }
+    }
   }
 
-  const requestPromise = fetch(API_URL, { 
-      method: 'POST', 
-      body: JSON.stringify({ action, payload, timestamp, signature }) 
+  const requestPromise = fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, payload, timestamp, signature })
   }).then(async response => {
-      const data = await response.json();
-      if (data.status === 'success' && action.startsWith("GET")) {
-          requestCache.set(cacheKey, { data, timestamp: Date.now() });
-      }
-      pendingRequests.delete(cacheKey);
-      return new Response(JSON.stringify(data));
-  }).catch(error => { 
-      pendingRequests.delete(cacheKey); 
-      throw error; 
+    const data = await response.json();
+    if (data.status === 'success' && action.startsWith('GET')) {
+      requestCache.set(cacheKey, { data, timestamp: Date.now() });
+    }
+    pendingRequests.delete(cacheKey);
+    return new Response(JSON.stringify(data));
+  }).catch(error => {
+    pendingRequests.delete(cacheKey);
+    throw error;
   });
 
   pendingRequests.set(cacheKey, requestPromise);
   return requestPromise;
-}
-
-// NEW UTILITY FUNCTIONS
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
 }
 
 function validateEmail(email) {
@@ -204,23 +201,22 @@ function validateEmail(email) {
 }
 
 function validateAICardData(data) {
-  if (!data.phone || String(data.phone).replace(/\D/g, '').length < 6) {
-    return { valid: false, error: "Invalid or missing phone number" };
+  if (!data.phone || String(data.phone).replace(/[^\d]/g, '').length < 6) {
+    return { valid: false, error: 'Invalid or missing phone number' };
   }
-  
   if (!data.name || String(data.name).length < 2) {
-    return { valid: false, error: "Invalid or missing name" };
+    return { valid: false, error: 'Invalid or missing name' };
   }
   
-  const phoneDigits = String(data.phone).replace(/\D/g, '');
-  if (/(\d)\1{5,}/.test(phoneDigits)) {
-    return { valid: false, error: "Phone number appears invalid (repeated digits)" };
+  const phoneDigits = String(data.phone).replace(/[^\d]/g, '');
+  if (/(.)\1{5}/.test(phoneDigits)) {
+    return { valid: false, error: 'Phone number appears invalid (repeated digits)' };
   }
   
   const lowercaseName = String(data.name).toLowerCase();
   const placeholders = ['john doe', 'jane doe', 'sample', 'example', 'test', 'card holder', 'name', 'customer'];
   if (placeholders.some(p => lowercaseName.includes(p))) {
-    return { valid: false, warning: "Name appears generic - please verify" };
+    return { valid: false, warning: 'Name appears generic - please verify' };
   }
   
   return { valid: true };
@@ -229,162 +225,66 @@ function validateAICardData(data) {
 function exportToCSV(data, filename) {
   const headers = ['Name', 'Phone', 'Email', 'Company', 'Designation', 'Website', 'Context', 'Tags', 'Status'];
   const rows = data.map(d => [
-    d.name || '',
-    d.phone || '',
-    d.email || '',
-    d.company || '',
-    d.designation || '',
-    d.website || '',
-    d.context || '',
-    d.tags || '',
+    d.name,
+    d.phone,
+    d.email,
+    d.company,
+    d.designation,
+    d.website,
+    d.context,
+    d.tags,
     d.status || 'PENDING'
   ]);
   
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-  ].join('\n');
+  const csvContent = [headers.join(','), ...rows.map(row => 
+    row.map(cell => String(cell).replace(/"/g, '""')).join(',')
+  )].join('\n');
   
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+  link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
 }
 
-// --- BACK BUTTON & NAVIGATION PROTECTION ---
-function useBackButtonHandler(onBack, shouldWarn = false, warningMessage = "Discard changes?") {
-  useEffect(() => {
-    const handlePopState = (e) => {
-      if (shouldWarn) {
-        if (!window.confirm(warningMessage)) {
-          window.history.pushState(null, '', window.location.href);
-          return;
-        }
-      }
-      onBack();
-    };
-
-    window.history.pushState(null, '', window.location.href);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [onBack, shouldWarn, warningMessage]);
-}
-
-function useUnsavedChanges(currentData, initialData) {
-  return JSON.stringify(currentData) !== JSON.stringify(initialData);
-}
-
-// --- COMPONENTS ---
-
-const QueueRow = ({ index, style, data }) => {
-  const { queue, onSelect, selected, toggleSelect, selectionMode, onLongPress } = data;
-  const lead = queue[index];
-  const [pressTimer, setPressTimer] = useState(null);
-  
-  // ULTRA-SAFE: Triple check lead validity
-  if (!lead || typeof lead !== 'object' || !lead.lead_id) {
-    return (
-      <div style={style} className="px-4 py-2">
-        <div className="p-3 rounded-xl bg-gray-100 text-gray-400">
-          Invalid lead data
-        </div>
-      </div>
-    );
-  }
-  
-  // ULTRA-SAFE: Extract primitive values only
-  const safeLead = {
-    id: String(lead.lead_id || ''),
-    name: String(lead.name || 'Unknown'),
-    phone: String(lead.phone || ''),
-    tags: String(lead.tags || '')
-  };
-  
-  const isSelected = selected.has(safeLead.id);
-
-  const handleTouchStart = () => {
-    const timer = setTimeout(() => {
-      if (onLongPress) onLongPress(lead);
-    }, 500);
-    setPressTimer(timer);
-  };
-
-  const handleTouchEnd = () => {
-    if (pressTimer) clearTimeout(pressTimer);
-  };
-
-  const tagsList = safeLead.tags ? safeLead.tags.split(',').filter(Boolean) : [];
-  const firstTag = tagsList.length > 0 ? tagsList[0].trim() : '';
-
-  return (
-    <div style={style} className="px-4 py-2">
-      <div 
-        onClick={() => selectionMode ? toggleSelect(safeLead.id) : onSelect(lead)} 
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onContextMenu={(e) => { e.preventDefault(); if (onLongPress) onLongPress(lead); }}
-        className={`p-3 rounded-xl border shadow-sm flex justify-between items-center transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-100'}`}
-      >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-           {selectionMode && (
-               <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
-                   {isSelected && <CheckCircle2 size={14}/>}
-               </div>
-           )}
-           <div className="flex-1 min-w-0">
-               <div className="font-bold text-gray-800 truncate">{safeLead.name}</div>
-               <div className="flex items-center gap-2 text-xs text-gray-500 font-mono flex-wrap">
-                  <span className="truncate">{safeLead.phone}</span>
-                  {firstTag && (
-                    <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] truncate max-w-[80px]">
-                      {firstTag}
-                    </span>
-                  )}
-               </div>
-           </div>
-        </div>
-        {!selectionMode && <ChevronRight size={16} className="text-gray-300 flex-shrink-0"/>}
-      </div>
-    </div>
-  );
-};
-
-// Add these THREE new components before your App function
-
-function LoadingOverlay({ message = "Processing..." }) {
+function LoadingOverlay({ message = 'Processing...' }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
       <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-4 shadow-2xl">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
         <p className="font-bold text-gray-900">{message}</p>
       </div>
     </div>
   );
 }
 
-function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel, confirmText = "Confirm", cancelText = "Cancel", confirmColor = "blue" }) {
+function ConfirmDialog({ 
+  isOpen, 
+  title, 
+  message, 
+  onConfirm, 
+  onCancel, 
+  confirmText = 'Confirm', 
+  cancelText = 'Cancel', 
+  confirmColor = 'blue' 
+}) {
   if (!isOpen) return null;
-
+  
   const colorClasses = {
-    blue: "bg-blue-600 hover:bg-blue-700",
-    red: "bg-red-600 hover:bg-red-700",
-    green: "bg-green-600 hover:bg-green-700"
+    blue: 'bg-blue-600 hover:bg-blue-700',
+    red: 'bg-red-600 hover:bg-red-700',
+    green: 'bg-green-600 hover:bg-green-700'
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-6">
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl"
       >
         <h3 className="text-xl font-bold mb-2 text-gray-900">{title}</h3>
         <p className="text-gray-600 mb-6">{message}</p>
-        
         <div className="flex gap-3">
           <button 
             onClick={onCancel}
@@ -405,25 +305,25 @@ function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel, confirmTex
 }
 
 function EditLeadModal({ lead, onSave, onClose }) {
-  const [form, setForm] = useState({ ...sanitizeLead(lead) });
+  const [form, setForm] = useState(() => sanitizeLead(lead));
   const [errors, setErrors] = useState({});
 
   const validatePhone = (phone) => {
-    const cleaned = String(phone).replace(/\D/g, '');
+    const cleaned = String(phone).replace(/[^\d]/g, '');
     return cleaned.length >= 10 && cleaned.length <= 13;
   };
 
   const handleSave = () => {
     const newErrors = {};
-    if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
-    if (!validatePhone(form.phone)) newErrors.phone = "Invalid phone number";
-    if (form.email && !validateEmail(form.email)) newErrors.email = "Invalid email";
-
+    if (!form.name || !form.name.trim()) newErrors.name = 'Name is required';
+    if (!validatePhone(form.phone)) newErrors.phone = 'Invalid phone number';
+    if (form.email && !validateEmail(form.email)) newErrors.email = 'Invalid email';
+    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-
+    
     onSave(form);
   };
 
@@ -433,49 +333,63 @@ function EditLeadModal({ lead, onSave, onClose }) {
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-lg">Edit Lead</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
-            <X size={20}/>
+            <X size={20} />
           </button>
         </div>
-
+        
         <div className="space-y-3">
           <div>
-            <input 
-              value={form.name} 
-              onChange={e=>{setForm({...form, name: e.target.value});setErrors(prev=>({...prev,name:null}))}} 
-              placeholder="Name *" 
+            <input
+              value={form.name}
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value });
+                setErrors(prev => ({ ...prev, name: null }));
+              }}
+              placeholder="Name"
               className={`w-full p-3 border rounded-xl outline-none focus:border-blue-500 ${errors.name ? 'border-red-500 bg-red-50' : ''}`}
             />
             {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
           </div>
-
+          
           <div>
-            <input 
-              value={form.phone} 
-              onChange={e=>{setForm({...form, phone: e.target.value});setErrors(prev=>({...prev,phone:null}))}} 
-              placeholder="Phone *" 
+            <input
+              value={form.phone}
+              onChange={(e) => {
+                setForm({ ...form, phone: e.target.value });
+                setErrors(prev => ({ ...prev, phone: null }));
+              }}
+              placeholder="Phone"
               type="tel"
               className={`w-full p-3 border rounded-xl outline-none focus:border-blue-500 ${errors.phone ? 'border-red-500 bg-red-50' : ''}`}
             />
             {errors.phone && <p className="text-red-600 text-xs mt-1">{errors.phone}</p>}
           </div>
-
+          
           <div>
-            <input 
-              value={form.email || ""} 
-              onChange={e=>{setForm({...form, email: e.target.value});setErrors(prev=>({...prev,email:null}))}} 
-              placeholder="Email" 
+            <input
+              value={form.email}
+              onChange={(e) => {
+                setForm({ ...form, email: e.target.value });
+                setErrors(prev => ({ ...prev, email: null }));
+              }}
+              placeholder="Email"
               type="email"
               className={`w-full p-3 border rounded-xl outline-none focus:border-blue-500 ${errors.email ? 'border-red-500 bg-red-50' : ''}`}
             />
             {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
           </div>
-
-          <input value={form.company || ""} onChange={e=>setForm({...form, company: e.target.value})} placeholder="Company" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500"/>
-          <input value={form.website || ""} onChange={e=>setForm({...form, website: e.target.value})} placeholder="Website" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500"/>
-          <input value={form.designation || ""} onChange={e=>setForm({...form, designation: e.target.value})} placeholder="Designation" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500"/>
-          <textarea value={form.context || ""} onChange={e=>setForm({...form, context: e.target.value})} placeholder="Notes / Context" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500 min-h-[80px] resize-none"/>
+          
+          <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" />
+          <input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="Website" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" />
+          <input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="Designation" className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" />
+          <textarea 
+            value={form.context} 
+            onChange={(e) => setForm({ ...form, context: e.target.value })}
+            placeholder="Notes / Context"
+            className="w-full p-3 border rounded-xl outline-none focus:border-blue-500 min-h-[80px] resize-none"
+          />
         </div>
-
+        
         <div className="flex gap-2 mt-6">
           <button onClick={onClose} className="flex-1 py-3 font-bold text-gray-500 border rounded-xl">Cancel</button>
           <button onClick={handleSave} className="flex-1 bg-blue-600 text-white rounded-xl font-bold py-3">Save Changes</button>
@@ -486,55 +400,37 @@ function EditLeadModal({ lead, onSave, onClose }) {
 }
 
 function AnalyticsScreen({ clientId, queue, onBack }) {
-  const [stats, setStats] = useState({
-    total: 0,
-    sent: 0,
-    pending: 0,
-    hot: 0,
-    interested: 0,
-    noAnswer: 0,
-    conversionRate: 0
-  });
+  const [stats, setStats] = useState({ total: 0, sent: 0, pending: 0, hot: 0, interested: 0, noAnswer: 0, conversionRate: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const calculateStats = () => {
       setLoading(true);
-      
       try {
         const safeQueue = Array.isArray(queue) ? queue.map(sanitizeLead) : [];
         const total = safeQueue.length;
         const sent = safeQueue.filter(l => l.status && l.status !== 'PENDING').length;
         const pending = safeQueue.filter(l => !l.status || l.status === 'PENDING').length;
-        const hot = safeQueue.filter(l => l.tags && String(l.tags).toLowerCase().includes('hot')).length;
-        const interested = safeQueue.filter(l => l.outcome && String(l.outcome).toLowerCase().includes('interested')).length;
-        const noAnswer = safeQueue.filter(l => l.outcome && String(l.outcome).toLowerCase().includes('no answer')).length;
-        
+        const hot = safeQueue.filter(l => String(l.tags).toLowerCase().includes('hot')).length;
+        const interested = safeQueue.filter(l => String(l.outcome).toLowerCase().includes('interested')).length;
+        const noAnswer = safeQueue.filter(l => String(l.outcome).toLowerCase().includes('no answer')).length;
         const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
-
-        setStats({
-          total,
-          sent,
-          pending,
-          hot,
-          interested,
-          noAnswer,
-          conversionRate
-        });
+        
+        setStats({ total, sent, pending, hot, interested, noAnswer, conversionRate });
       } catch (e) {
-        console.error("Stats calculation failed:", e);
+        console.error('Stats calculation failed', e);
       } finally {
         setLoading(false);
       }
     };
-
+    
     calculateStats();
   }, [queue]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
       </div>
     );
   }
@@ -544,14 +440,14 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
       <div className="bg-white p-4 border-b shadow-sm sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <ArrowLeft/>
+            <ArrowLeft />
           </button>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <TrendingUp className="text-blue-600"/> Analytics
+            <TrendingUp className="text-blue-600" /> Analytics
           </h1>
         </div>
       </div>
-
+      
       <div className="p-6 space-y-6">
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 gap-4">
@@ -559,8 +455,7 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
             <p className="text-gray-500 text-xs uppercase font-bold mb-1">Total Leads</p>
             <p className="text-4xl font-black text-gray-900">{stats.total}</p>
             <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
-              <ListIcon size={12}/>
-              <span>In database</span>
+              <ListIcon size={12} /> <span>In database</span>
             </div>
           </div>
 
