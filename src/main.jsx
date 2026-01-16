@@ -121,7 +121,7 @@ class ErrorBoundary extends Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6isxGe5owOtPAsN6eABKDJw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwTmH-Db341gQGXZ9GcaDD0hwP11kMoACe-7oAoQaWU6i_sxGe5owO_tPAsN6_eABKDJw/exec';
 const ADMIN_PASSWORD = 'thrivoyboss';
 const ADMIN_KEY = 'master';
 const LEAD_LIMIT = 100;
@@ -3226,6 +3226,10 @@ function LandingPage() {
     </div>
   );
 }
+
+// Add this to your frontend for debugging
+console.log('API URL:', API_URL);
+console.log('Origin:', window.location.origin);
 
 // --- ROOT RENDER ---
 const root = createRoot(document.getElementById('root'));
