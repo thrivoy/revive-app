@@ -157,12 +157,12 @@ async function signedRequest(action, payload) {
   }
 
   const timestamp = Date.now();
-  const clientId = payload.clientid;
+  const clientId = payload.client_id || payload.clientid;
   
   let signature = '';
   if (action !== 'ADDCLIENT' && action !== 'GETCLIENTBYSLUG' && action !== 'VERIFYPIN' && 
       action !== 'ADDLEADS' && action !== 'GETREFERRALSTATS' && clientId !== ADMIN_KEY) {
-    const secret = safeStorage.getItem(`thrivoysecret-${clientId}`);
+    const secret = safeStorage.getItem(`thrivoy_secret_${clientId}`);
     if (secret && window.crypto?.subtle) {
       try {
         const enc = new TextEncoder();
