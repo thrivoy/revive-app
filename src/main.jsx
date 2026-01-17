@@ -1188,16 +1188,21 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   const [isLoading, setIsLoading] = useState(false);
 
   // Filter queue based on search
-  const filteredQueue = useMemo(() => {
-    if (!searchQuery) return safeQueue;
-    const q = searchQuery.toLowerCase();
-    return safeQueue.filter(l => 
-      l.name.toLowerCase().includes(q) || 
-      l.phone.includes(q) ||
-      (l.email && l.email.toLowerCase().includes(q)) ||
-      (l.company && l.company.toLowerCase().includes(q))
-    );
-  }, [safeQueue, searchQuery]);
+const filteredQueue = useMemo(() => {
+  if (!searchQuery) return safeQueue;
+  const q = searchQuery.toLowerCase();
+  return safeQueue.filter(l => {
+    try {
+      return (l.name && String(l.name).toLowerCase().includes(q)) ||
+             (l.phone && String(l.phone).includes(q)) ||
+             (l.email && String(l.email).toLowerCase().includes(q)) ||
+             (l.company && String(l.company).toLowerCase().includes(q));
+    } catch (e) {
+      console.error('Search filter error:', e, l);
+      return false;
+    }
+  });
+}, [safeQueue, searchQuery]);
 
   const toggleSelect = (id) => { 
       setSelectionMode(true); 
