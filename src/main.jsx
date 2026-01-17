@@ -160,14 +160,14 @@ async function signedRequest(action, payload) {
   const clientId = payload.client_id || payload.clientid;
   
   let signature = '';
-  if (action !== 'ADDCLIENT' && action !== 'GETCLIENTBYSLUG' && action !== 'VERIFYPIN' && 
-      action !== 'ADDLEADS' && action !== 'GETREFERRALSTATS' && clientId !== ADMIN_KEY) {
+  if (action !== 'ADD_CLIENT' && action !== 'GET_CLIENT_BY_SLUG' && action !== 'VERIFY_PIN' && 
+      action !== 'ADD_LEADS' && action !== 'GET_REFERRAL_STATS' && clientId !== ADMIN_KEY) {
     const secret = safeStorage.getItem(`thrivoy_secret_${clientId}`);
     if (secret && window.crypto?.subtle) {
       try {
         const enc = new TextEncoder();
         const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-        const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${clientId}${timestamp}`));
+        const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${clientId}:${timestamp}`));
         signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
       } catch (e) {
         console.error('Signing failed', e);
