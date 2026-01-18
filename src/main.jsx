@@ -604,6 +604,51 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
   );
 }
 
+// Custom hook to detect unsaved changes
+function useUnsavedChanges(currentState, initialState) {
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (!currentState || !initialState) {
+      setHasChanges(false);
+      return;
+    }
+
+    // Deep comparison for objects
+    const changed = JSON.stringify(currentState) !== JSON.stringify(initialState);
+    setHasChanges(changed);
+  }, [currentState, initialState]);
+
+  return hasChanges;
+}
+
+// Custom hook for back button handling
+function useBackButtonHandler(onBack, shouldWarn = false, warningMessage = "You have unsaved changes. Are you sure you want to leave?") {
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (shouldWarn) {
+        e.preventDefault();
+        if (window.confirm(warningMessage)) {
+          onBack();
+        } else {
+          // Push state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+        }
+      } else {
+        onBack();
+      }
+    };
+
+    // Push initial state
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [onBack, shouldWarn, warningMessage]);
+} 
+
 function App() {
   const [view, setView] = useState("loader");
   const [clientId, setClientId] = useState(null);
@@ -1190,21 +1235,27 @@ function PowerEmailer({ queue, selectedIds, template, onBack }) {
 function QueueRow({ index, style, data }) {
   const { queue, onSelect, selected, toggleSelect, selectionMode, onLongPress } = data;
   const lead = queue[index];
+  const pressTimerRef = useRef(null); // ✅ FIX: Use ref instead of regular variable
   
   if (!lead) return null;
   
   const isSelected = selected.has(lead.lead_id);
   
   // Long press handling
-  let pressTimer;
   const handleTouchStart = () => {
-    pressTimer = setTimeout(() => {
-      if (onLongPress) onLongPress(lead);
+    pressTimerRef.current = setTimeout(() => {
+      if (onLongPress) {
+        vibrate(100); // Optional: Add haptic feedback
+        onLongPress(lead);
+      }
     }, 500);
   };
   
   const handleTouchEnd = () => {
-    clearTimeout(pressTimer);
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
   };
 
   return (
@@ -1222,6 +1273,7 @@ function QueueRow({ index, style, data }) {
         }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd} // ✅ ADD: Handle touch cancel
       >
         <div className="flex items-center gap-3">
           {selectionMode && (
@@ -1304,22 +1356,29 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   const [confirmAction, setConfirmAction] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // DEBUG: Log queue data
+  console.log('QueueList - safeQueue:', safeQueue);
+  console.log('QueueList - safeQueue length:', safeQueue.length);
+
   // Filter queue based on search
-const filteredQueue = useMemo(() => {
-  if (!searchQuery) return safeQueue;
-  const q = searchQuery.toLowerCase();
-  return safeQueue.filter(l => {
-    try {
-      return (l.name && String(l.name).toLowerCase().includes(q)) ||
-             (l.phone && String(l.phone).includes(q)) ||
-             (l.email && String(l.email).toLowerCase().includes(q)) ||
-             (l.company && String(l.company).toLowerCase().includes(q));
-    } catch (e) {
-      console.error('Search filter error:', e, l);
-      return false;
-    }
-  });
-}, [safeQueue, searchQuery]);
+  const filteredQueue = useMemo(() => {
+    if (!searchQuery) return safeQueue;
+    const q = searchQuery.toLowerCase();
+    return safeQueue.filter(l => {
+      try {
+        return (l.name && String(l.name).toLowerCase().includes(q)) ||
+               (l.phone && String(l.phone).includes(q)) ||
+               (l.email && String(l.email).toLowerCase().includes(q)) ||
+               (l.company && String(l.company).toLowerCase().includes(q));
+      } catch (e) {
+        console.error('Search filter error:', e, l);
+        return false;
+      }
+    });
+  }, [safeQueue, searchQuery]);
+
+  console.log('QueueList - filteredQueue:', filteredQueue);
+  console.log('QueueList - filteredQueue length:', filteredQueue.length);
 
   const toggleSelect = (id) => { 
       setSelectionMode(true); 
@@ -1396,7 +1455,7 @@ const filteredQueue = useMemo(() => {
                 </button>
                 <h2 className="font-bold">{selectionMode ? `${selectedLeads.size} Selected` : `Queue (${filteredQueue.length})`}</h2>
               </div>
-              {!selectionMode && <button onClick={() => setSelectionMode(true)} className="text-sm font-bold text-blue-600">Select</button>}
+              {!selectionMode && filteredQueue.length > 0 && <button onClick={() => setSelectionMode(true)} className="text-sm font-bold text-blue-600">Select</button>}
               {selectionMode && <button onClick={() => { setSelectionMode(false); setSelectedLeads(new Set()); }} className="text-sm font-bold text-gray-500">Cancel</button>}
             </div>
             
@@ -1421,7 +1480,7 @@ const filteredQueue = useMemo(() => {
             </div>
         </div>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
             {isLoading ? (
               <QueueListSkeleton />
             ) : filteredQueue.length === 0 ? (
@@ -1429,13 +1488,13 @@ const filteredQueue = useMemo(() => {
                 <div className="text-center">
                   <ListIcon size={48} className="mx-auto mb-4 opacity-50"/>
                   <p className="font-bold">No leads found</p>
-                  <p className="text-sm">Try adjusting your search</p>
+                  <p className="text-sm">{searchQuery ? 'Try adjusting your search' : 'Add some leads to get started'}</p>
                 </div>
               </div>
             ) : (
               <AutoSizer>
                   {({ height, width }) => (
-                      <List 
+                      <FixedSizeList 
                         height={height} 
                         width={width} 
                         itemCount={filteredQueue.length} 
@@ -1452,7 +1511,7 @@ const filteredQueue = useMemo(() => {
                         }}
                       >
                         {QueueRow}
-                      </List>
+                      </FixedSizeList>
                   )}
               </AutoSizer>
             )}
@@ -1479,7 +1538,7 @@ const filteredQueue = useMemo(() => {
                     <h3 className="font-bold mb-4">Add Tag</h3>
                     <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500" aria-label="Enter tag name"/>
                     <div className="flex gap-2">
-                        <button onClick={() => setShowTagInput(false)} className="flex-1 py-3 font-bold text-gray-500">Cancel</button>
+                        <button onClick={() => setShowTagInput(false)} className="flex-1 py-3 font-bold text-gray-500 border rounded-xl">Cancel</button>
                         <button onClick={handleAddTag} className="flex-1 bg-purple-600 text-white rounded-xl font-bold py-3">Save</button>
                     </div>
                 </div>
