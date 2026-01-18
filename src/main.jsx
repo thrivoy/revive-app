@@ -1070,10 +1070,8 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
   const isFree = userProfile?.plan === "Free" || !userProfile?.plan;
   const percentUsed = (usage / 100) * 100;
 
-  // 🔍 DEBUG: Log queue data
   console.log('MenuScreen - Queue:', safeQueue);
   console.log('MenuScreen - Queue Length:', usage);
-  console.log('MenuScreen - Stats:', stats);
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-safe">
@@ -1107,10 +1105,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
          )}
          
          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-xl shadow-blue-200 flex justify-between items-center relative overflow-hidden">
-            <div className="relative z-10">
-              <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p>
-              <p className="text-4xl font-black mt-1">{stats.today || 0}</p>
-            </div>
+            <div className="relative z-10"><p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p><p className="text-4xl font-black mt-1">{stats.today || 0}</p></div>
             <div className="bg-white/20 p-3 rounded-xl relative z-10"><Zap size={24} fill="currentColor"/></div>
          </div>
          
@@ -1127,10 +1122,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
          >
              <div className="flex items-center gap-3">
                  <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><ListIcon size={20}/></div>
-                 <div className="text-left">
-                   <p className="font-bold text-gray-800">Active Queue</p>
-                   <p className="text-xs text-gray-500">{usage} / {LEAD_LIMIT} leads</p>
-                 </div>
+                 <div className="text-left"><p className="font-bold text-gray-800">Active Queue</p><p className="text-xs text-gray-500">{usage} / {LEAD_LIMIT} leads</p></div>
              </div>
              <ChevronRight size={20} className="text-gray-300"/>
          </button>
@@ -1161,7 +1153,15 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
          </div>
 
          {safeQueue.length > 0 && (
-             <button onClick={() => onViewChange("stack")} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 mt-4 active:scale-[0.98] transition-transform"><Play fill="currentColor" size={20}/> Start Calling</button>
+             <button 
+               onClick={() => {
+                 console.log('Start Calling - Queue:', safeQueue);
+                 onViewChange("stack");
+               }} 
+               className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 mt-4 active:scale-[0.98] transition-transform"
+             >
+               <Play fill="currentColor" size={20}/> Start Calling
+             </button>
          )}
       </main>
     </div>
@@ -1609,13 +1609,12 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
 }
 
 function CardStack({ queue, setQueue, template, library, clientId, onBack, initialLead }) {
-  // FIX: Make sure queue is always an array
   const safeQueue = Array.isArray(queue) ? queue : [];
   
   const [active, setActive] = useState(initialLead || safeQueue[0]);
   const [msg, setMsg] = useState("");
   const [msgCache, setMsgCache] = useState({});
-  const controls = useAnimation(); // ✅ Now this will work
+  const controls = useAnimation();
   const [mode, setMode] = useState("card");
   const [polyglot, setPolyglot] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
@@ -1637,14 +1636,15 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
   );
 
   const generateMessage = useCallback((lead) => {
+    if (!lead) return "";
     const ctx = (lead.context || "").split(" ||| ")[0];
-    let tpl = template;
+    let tpl = template || "Hi {{name}}, regarding {{context}}.";
     const match = library.find(l => ctx.toLowerCase().includes(l.name.toLowerCase()));
     if (match) tpl = match.text;
-    return tpl.replace("{{name}}", lead.name).replace("{{context}}", ctx);
+    return tpl.replace("{{name}}", lead.name || "").replace("{{context}}", ctx || "");
   }, [template, library]);
 
-  // Check for saved position on mount
+  // Check for saved position on mount ONLY
   useEffect(() => {
     const savedPosition = safeStorage.getItem(`queue_position_${clientId}`);
     if (savedPosition && !initialLead) {
@@ -1662,26 +1662,40 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         console.error("Failed to restore position:", e);
       }
     }
-  }, [safeQueue, clientId, initialLead]);
+  }, []); // ✅ Run only once on mount
 
+  // ✅ FIX: Only update message when active lead changes
   useEffect(() => {
     if (!active) return;
+    
+    // Check cache first
     const cachedMsg = msgCache[active.lead_id];
     if (cachedMsg) {
       setMsg(cachedMsg);
     } else {
+      // Generate new message only if not in cache
       const newMsg = generateMessage(active);
       setMsg(newMsg);
       setMsgCache(prev => ({ ...prev, [active.lead_id]: newMsg }));
     }
+    
+    // Reset animation position
     controls.set({ x: 0, opacity: 1 });
-  }, [active?.lead_id, msgCache, generateMessage, controls]);
+  }, [active?.lead_id]); // ✅ Only depend on lead_id
 
+  // Cache user edits to message
   useEffect(() => {
-    if (active && msg && msg !== msgCache[active.lead_id]) {
-      setMsgCache(prev => ({ ...prev, [active.lead_id]: msg }));
+    if (!active || !msg) return;
+    
+    // Only update cache if message has changed
+    if (msg !== msgCache[active.lead_id]) {
+      const timeoutId = setTimeout(() => {
+        setMsgCache(prev => ({ ...prev, [active.lead_id]: msg }));
+      }, 500); // Debounce updates
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [msg, active, msgCache]);
+  }, [msg]); // ✅ Only depend on msg
 
   const next = () => {
     const idx = safeQueue.findIndex(l => l.lead_id === active.lead_id);
@@ -1849,7 +1863,6 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
             if (window.confirm("Exit calling queue?")) onBack();
           }} 
           className="p-2 bg-white rounded-full shadow-sm"
-          aria-label="Go back to menu"
         >
           <ArrowLeft/>
         </button>
@@ -1857,7 +1870,6 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
         <button 
           onClick={handlePause}
           className="p-2 bg-orange-100 text-orange-600 rounded-full shadow-sm hover:bg-orange-200"
-          aria-label="Pause calling queue"
         >
           <Pause size={20}/>
         </button>
@@ -1917,6 +1929,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
                   </button>
                 </div>
                 <textarea 
+                  key={active.lead_id}
                   value={msg} 
                   onChange={e => setMsg(e.target.value)} 
                   disabled={isProcessing} 
