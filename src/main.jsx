@@ -1578,7 +1578,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
   const [active, setActive] = useState(initialLead || safeQueue[0]);
   const [msg, setMsg] = useState("");
   const [msgCache, setMsgCache] = useState({});
-  const controls = useAnimation();
+  const controls = useAnimation(); // ✅ Now this will work
   const [mode, setMode] = useState("card");
   const [polyglot, setPolyglot] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
@@ -1638,13 +1638,13 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
       setMsgCache(prev => ({ ...prev, [active.lead_id]: newMsg }));
     }
     controls.set({ x: 0, opacity: 1 });
-  }, [active?.lead_id]);
+  }, [active?.lead_id, msgCache, generateMessage, controls]);
 
   useEffect(() => {
     if (active && msg && msg !== msgCache[active.lead_id]) {
       setMsgCache(prev => ({ ...prev, [active.lead_id]: msg }));
     }
-  }, [msg]);
+  }, [msg, active, msgCache]);
 
   const next = () => {
     const idx = safeQueue.findIndex(l => l.lead_id === active.lead_id);
@@ -1757,7 +1757,8 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     vibrate();
     const d = new Date();
     d.setDate(d.getDate() + days);
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Call ${active.name}&dates=${d.toISOString().replace(/-|:|\.\d+/g, "")}/${d.toISOString().replace(/-|:|\.\d+/g, "")}`;
+    const isoDate = d.toISOString().replace(/-|:|\.\d+/g, "");
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Call ${active.name}&dates=${isoDate}/${isoDate}`;
     window.open(url, '_blank');
     submitAction("Snoozed");
   };
@@ -1949,7 +1950,12 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
               </div>
             </motion.div>
           ) : mode === 'snooze' ? (
-            <div className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4">
+            <motion.div
+              key="snooze"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white w-full max-w-sm rounded-3xl shadow-xl p-8 flex flex-col justify-center items-center gap-4"
+            >
               <h3 className="font-bold">Snooze until...</h3>
               <button 
                 onClick={() => handleSnooze(1)} 
@@ -1968,7 +1974,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
               <button onClick={() => setMode("card")} className="mt-4 text-sm text-gray-400">
                 Cancel
               </button>
-            </div>
+            </motion.div>
           ) : (
             <motion.div 
               key="disp" 
