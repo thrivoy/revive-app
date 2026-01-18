@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Component } f
 import { createRoot } from 'react-dom/client';
 import * as ReactWindowPkg from 'react-window';
 import * as AutoSizerPkg from 'react-virtualized-auto-sizer';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import Papa from 'papaparse';
 import { 
   Phone, Upload, UserPlus, ArrowLeft, Trash2, Zap, ScanLine, Settings, List as ListIcon, 
