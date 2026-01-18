@@ -51,7 +51,7 @@ function sanitizeValue(val, type = 'string') {
 function sanitizeLead(lead) {
   if (!lead || typeof lead !== 'object') {
     return {
-      leadid: 'invalid-' + Date.now(),
+      lead_id: 'invalid-' + Date.now(),  // Changed from leadid
       name: 'Invalid Lead',
       phone: '',
       email: '',
@@ -65,8 +65,7 @@ function sanitizeLead(lead) {
     };
   }
   return {
-    leadid: sanitizeValue(lead.leadid, 'string'),
-    lead: Date.now(),
+    lead_id: sanitizeValue(lead.lead_id, 'string'),  // Changed from leadid
     name: sanitizeValue(lead.name, 'string') || 'Unknown',
     phone: sanitizeValue(lead.phone, 'string'),
     email: sanitizeValue(lead.email, 'string'),
@@ -718,14 +717,30 @@ function App() {
     try {
       const res = await signedRequest("GET_QUEUE", { client_id: id });
       const json = await res.json();
+      
+      // 🔍 DEBUG: Log the API response
+      console.log('=== FETCH QUEUE DEBUG ===');
+      console.log('API Response:', json);
+      console.log('Queue Data:', json.data?.queue);
+      console.log('Queue Length:', json.data?.queue?.length);
+      console.log('Stats Data:', json.data?.stats);
+      console.log('========================');
+      
       if (json.data) {
         // CRITICAL FIX: Ensure queue is always an array
         const queueData = json.data.queue;
-        setQueue(Array.isArray(queueData) ? queueData : []);
+        const processedQueue = Array.isArray(queueData) ? queueData.map(sanitizeLead) : [];
+        
+        console.log('Processed Queue:', processedQueue);
+        setQueue(processedQueue);
         
         // CRITICAL FIX: Ensure stats is always an object with proper structure
         const statsData = json.data.stats;
         setStats(statsData && typeof statsData === 'object' ? { today: statsData.today || 0 } : { today: 0 });
+      } else {
+        console.warn('No data in API response');
+        setQueue([]);
+        setStats({ today: 0 });
       }
     } catch (e) {
       console.error("Fetch queue error:", e);
@@ -1010,6 +1025,11 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
   const isFree = userProfile?.plan === "Free" || !userProfile?.plan;
   const percentUsed = (usage / 100) * 100;
 
+  // 🔍 DEBUG: Log queue data
+  console.log('MenuScreen - Queue:', safeQueue);
+  console.log('MenuScreen - Queue Length:', usage);
+  console.log('MenuScreen - Stats:', stats);
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-safe">
       <header className="bg-white p-4 flex justify-between items-center shadow-sm sticky top-0 z-10">
@@ -1042,7 +1062,10 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
          )}
          
          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-xl shadow-blue-200 flex justify-between items-center relative overflow-hidden">
-            <div className="relative z-10"><p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p><p className="text-4xl font-black mt-1">{stats.today}</p></div>
+            <div className="relative z-10">
+              <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Today's Wins</p>
+              <p className="text-4xl font-black mt-1">{stats.today || 0}</p>
+            </div>
             <div className="bg-white/20 p-3 rounded-xl relative z-10"><Zap size={24} fill="currentColor"/></div>
          </div>
          
@@ -1050,10 +1073,19 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
              <DollarSign size={20}/> Earn with Referrals
          </button>
 
-         <button onClick={() => onViewChange("list")} className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors">
+         <button 
+           onClick={() => {
+             console.log('Active Queue Clicked - Queue:', safeQueue);
+             onViewChange("list");
+           }} 
+           className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors"
+         >
              <div className="flex items-center gap-3">
                  <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><ListIcon size={20}/></div>
-                 <div className="text-left"><p className="font-bold text-gray-800">Active Queue</p><p className="text-xs text-gray-500">{queue.length} / {LEAD_LIMIT} leads</p></div>
+                 <div className="text-left">
+                   <p className="font-bold text-gray-800">Active Queue</p>
+                   <p className="text-xs text-gray-500">{usage} / {LEAD_LIMIT} leads</p>
+                 </div>
              </div>
              <ChevronRight size={20} className="text-gray-300"/>
          </button>
@@ -1083,7 +1115,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
              <button onClick={() => onViewChange("help")} className="bg-gray-100 p-3 rounded-xl text-gray-500"><HelpCircle size={16}/></button>
          </div>
 
-         {queue.length > 0 && (
+         {safeQueue.length > 0 && (
              <button onClick={() => onViewChange("stack")} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold shadow-xl flex items-center justify-center gap-2 mt-4 active:scale-[0.98] transition-transform"><Play fill="currentColor" size={20}/> Start Calling</button>
          )}
       </main>
@@ -1153,6 +1185,91 @@ function PowerEmailer({ queue, selectedIds, template, onBack }) {
             </div>
         </div>
     );
+}
+
+function QueueRow({ index, style, data }) {
+  const { queue, onSelect, selected, toggleSelect, selectionMode, onLongPress } = data;
+  const lead = queue[index];
+  
+  if (!lead) return null;
+  
+  const isSelected = selected.has(lead.lead_id);
+  
+  // Long press handling
+  let pressTimer;
+  const handleTouchStart = () => {
+    pressTimer = setTimeout(() => {
+      if (onLongPress) onLongPress(lead);
+    }, 500);
+  };
+  
+  const handleTouchEnd = () => {
+    clearTimeout(pressTimer);
+  };
+
+  return (
+    <div style={style} className="px-4">
+      <div 
+        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+          isSelected ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-200'
+        } hover:shadow-md`}
+        onClick={() => {
+          if (selectionMode) {
+            toggleSelect(lead.lead_id);
+          } else {
+            onSelect(lead);
+          }
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="flex items-center gap-3">
+          {selectionMode && (
+            <div 
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+              }`}
+            >
+              {isSelected && <CheckCircle2 size={14} className="text-white"/>}
+            </div>
+          )}
+          
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+            lead.tags?.toLowerCase().includes('hot') ? 'bg-red-500' : 'bg-blue-500'
+          }`}>
+            {lead.name.charAt(0).toUpperCase()}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 truncate">{lead.name}</h3>
+            <p className="text-sm text-gray-600 font-mono">{lead.phone}</p>
+            {lead.company && (
+              <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                <Building2 size={10}/> {lead.company}
+              </p>
+            )}
+          </div>
+          
+          <div className="flex flex-col items-end gap-1">
+            {lead.tags && (
+              <div className="flex gap-1 flex-wrap justify-end">
+                {lead.tags.split(',').slice(0, 2).map((tag, i) => (
+                  <span key={i} className="text-[9px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                    {tag.trim()}
+                  </span>
+                ))}
+              </div>
+            )}
+            <ChevronRight size={16} className="text-gray-400"/>
+          </div>
+        </div>
+        
+        {lead.context && (
+          <p className="text-xs text-gray-500 mt-2 pl-13 line-clamp-1">{lead.context}</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function QueueListSkeleton() {
