@@ -1344,7 +1344,6 @@ function QueueListSkeleton() {
 }
 
 function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, onPowerEmail, clientId, onRefresh }) {
-  // FIX: Make sure queue is always an array
   const safeQueue = Array.isArray(queue) ? queue : [];
   
   const [selectionMode, setSelectionMode] = useState(false); 
@@ -1354,11 +1353,12 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
   const [editingLead, setEditingLead] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // DEBUG: Log queue data
-  console.log('QueueList - safeQueue:', safeQueue);
-  console.log('QueueList - safeQueue length:', safeQueue.length);
+  console.log('🔍 QueueList Render:', {
+    queueLength: safeQueue.length,
+    searchQuery,
+    queue: safeQueue
+  });
 
   // Filter queue based on search
   const filteredQueue = useMemo(() => {
@@ -1377,8 +1377,7 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
     });
   }, [safeQueue, searchQuery]);
 
-  console.log('QueueList - filteredQueue:', filteredQueue);
-  console.log('QueueList - filteredQueue length:', filteredQueue.length);
+  console.log('🔍 Filtered Queue:', filteredQueue.length);
 
   const toggleSelect = (id) => { 
       setSelectionMode(true); 
@@ -1480,63 +1479,103 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
             </div>
         </div>
 
-        <div className="flex-1 relative overflow-hidden">
-            {isLoading ? (
-              <QueueListSkeleton />
-            ) : filteredQueue.length === 0 ? (
+        {/* SIMPLE LIST - No virtualization for debugging */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {filteredQueue.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-400">
-                <div className="text-center">
+                <div className="text-center py-20">
                   <ListIcon size={48} className="mx-auto mb-4 opacity-50"/>
                   <p className="font-bold">No leads found</p>
                   <p className="text-sm">{searchQuery ? 'Try adjusting your search' : 'Add some leads to get started'}</p>
                 </div>
               </div>
             ) : (
-              <AutoSizer>
-                  {({ height, width }) => (
-                      <FixedSizeList 
-                        height={height} 
-                        width={width} 
-                        itemCount={filteredQueue.length} 
-                        itemSize={80} 
-                        itemData={{
-                          queue: filteredQueue, 
-                          onSelect: (lead) => {
-                            if (!selectionMode) onSelect(lead);
-                          }, 
-                          selected: selectedLeads, 
-                          toggleSelect, 
-                          selectionMode,
-                          onLongPress: handleLongPress
-                        }}
-                      >
-                        {QueueRow}
-                      </FixedSizeList>
-                  )}
-              </AutoSizer>
+              filteredQueue.map((lead, index) => {
+                const isSelected = selectedLeads.has(lead.lead_id);
+                
+                return (
+                  <div 
+                    key={lead.lead_id || index}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      isSelected ? 'bg-blue-50 border-blue-500' : 'bg-white border-gray-200'
+                    } hover:shadow-md`}
+                    onClick={() => {
+                      if (selectionMode) {
+                        toggleSelect(lead.lead_id);
+                      } else {
+                        onSelect(lead);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {selectionMode && (
+                        <div 
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                            isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                          }`}
+                        >
+                          {isSelected && <CheckCircle2 size={14} className="text-white"/>}
+                        </div>
+                      )}
+                      
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                        lead.tags?.toLowerCase().includes('hot') ? 'bg-red-500' : 'bg-blue-500'
+                      }`}>
+                        {lead.name ? lead.name.charAt(0).toUpperCase() : '?'}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 truncate">{lead.name}</h3>
+                        <p className="text-sm text-gray-600 font-mono">{lead.phone}</p>
+                        {lead.company && (
+                          <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                            <Building2 size={10}/> {lead.company}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-1">
+                        {lead.tags && (
+                          <div className="flex gap-1 flex-wrap justify-end">
+                            {lead.tags.split(',').slice(0, 2).map((tag, i) => (
+                              <span key={i} className="text-[9px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                {tag.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <ChevronRight size={16} className="text-gray-400"/>
+                      </div>
+                    </div>
+                    
+                    {lead.context && (
+                      <p className="text-xs text-gray-500 mt-2 pl-13 truncate">{lead.context}</p>
+                    )}
+                  </div>
+                );
+              })
             )}
         </div>
 
         {selectionMode && selectedLeads.size > 0 && (
             <div className="bg-white border-t p-4 flex gap-2 overflow-x-auto pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                <button onClick={onPowerEmail} className="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Start rapid fire email campaign">
+                <button onClick={onPowerEmail} className="bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2">
                   <Zap size={16}/> Rapid Fire
                 </button>
-                <button onClick={handleBCCWithConfirm} className="bg-gray-900 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Send BCC email to selected leads">
+                <button onClick={handleBCCWithConfirm} className="bg-gray-900 text-white px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2">
                   <Mail size={16}/> BCC Blast
                 </button>
-                <button onClick={() => setShowTagInput(true)} className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2" aria-label="Add tag to selected leads">
+                <button onClick={() => setShowTagInput(true)} className="bg-purple-100 text-purple-700 px-4 py-3 rounded-xl font-bold text-sm whitespace-nowrap flex items-center gap-2">
                   <Tag size={16}/> Tag
                 </button>
             </div>
         )}
 
-        {/* Tag Input Modal */}
         {showTagInput && (
             <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
                 <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
                     <h3 className="font-bold mb-4">Add Tag</h3>
-                    <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500" aria-label="Enter tag name"/>
+                    <input autoFocus value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="#Hot" className="w-full p-3 border rounded-xl mb-4 outline-none focus:border-blue-500"/>
                     <div className="flex gap-2">
                         <button onClick={() => setShowTagInput(false)} className="flex-1 py-3 font-bold text-gray-500 border rounded-xl">Cancel</button>
                         <button onClick={handleAddTag} className="flex-1 bg-purple-600 text-white rounded-xl font-bold py-3">Save</button>
@@ -1545,7 +1584,6 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
             </div>
         )}
 
-        {/* Confirmation Dialog */}
         <ConfirmDialog 
           isOpen={showConfirm}
           title={confirmAction?.title || ""}
@@ -1559,7 +1597,6 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
           confirmColor="blue"
         />
 
-        {/* Edit Lead Modal */}
         {editingLead && (
           <EditLeadModal 
             lead={editingLead} 
