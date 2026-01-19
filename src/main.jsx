@@ -121,9 +121,12 @@ class ErrorBoundary extends Component {
 }
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbxOngDPlaePVboF3MQPZV76Wm_ap4684yJuRrOvptq5cLiURTTx6S_jD_IZ_LBCDIgQPg/exec';
-const ADMIN_PASSWORD = 'thrivoyboss';
 const ADMIN_KEY = 'master';
 const LEAD_LIMIT = 100;
+const CACHE_TTL_MS = 300000; // 5 minutes
+const PIN_MAX_LENGTH = 4;
+const RATE_LIMIT_DELAY_MS = 60000; // 1 minute
+const MAX_PIN_ATTEMPTS = 5;
 
 const safeStorage = {
   getItem: (k) => {
@@ -140,6 +143,40 @@ const safeStorage = {
 const vibrate = (ms = 50) => {
   if (navigator.vibrate) navigator.vibrate(ms);
 };
+const ValidationUtils = {
+  email: (email) => {
+    if (!email) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  },
+  phone: (phone) => {
+    const cleaned = String(phone).replace(/\D/g, '');
+    return cleaned.length >= 10 && cleaned.length <= 13;
+  },
+  pin: (pin) => {
+    return /^\d{4}$/.test(String(pin));
+  },
+  aiCardData: (data) => {
+    if (!data.phone || !ValidationUtils.phone(data.phone)) {
+      return { valid: false, error: 'Invalid or missing phone number' };
+    }
+    if (!data.name || String(data.name).length < 2) {
+      return { valid: false, error: 'Invalid or missing name' };
+    }
+    
+    const phoneDigits = String(data.phone).replace(/[^\d]/g, '');
+    if (/(.)\1{5}/.test(phoneDigits)) {
+      return { valid: false, error: 'Phone number appears invalid (repeated digits)' };
+    }
+    
+    const lowercaseName = String(data.name).toLowerCase();
+    const placeholders = ['john doe', 'jane doe', 'sample', 'example', 'test', 'card holder', 'name', 'customer'];
+    if (placeholders.some(p => lowercaseName.includes(p))) {
+      return { valid: false, warning: 'Name appears generic - please verify' };
+    }
+    
+    return { valid: true };
+  }
+};
 
 const pendingRequests = new Map();
 
@@ -149,8 +186,7 @@ async function signedRequest(action, payload) {
   
   if (requestCache.has(cacheKey) && !action.includes('MARK') && !action.includes('ADD') && !action.includes('UPDATE')) {
     const cached = requestCache.get(cacheKey);
-    if (Date.now() - cached.timestamp < 5000) {
-      requestCache.delete(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return Promise.resolve(new Response(JSON.stringify(cached.data)));
     }
   }
@@ -160,7 +196,7 @@ async function signedRequest(action, payload) {
   
   let signature = '';
   if (action !== 'ADD_CLIENT' && action !== 'GET_CLIENT_BY_SLUG' && action !== 'VERIFY_PIN' && 
-      action !== 'ADD_LEADS' && action !== 'GET_REFERRAL_STATS' && clientId !== ADMIN_KEY) {
+      action !== 'ADD_LEADS' && action !== 'GET_REFERRAL_STATS') {
     const secret = safeStorage.getItem(`thrivoy_secret_${clientId}`);
     if (secret && window.crypto?.subtle) {
       try {
@@ -169,7 +205,13 @@ async function signedRequest(action, payload) {
         const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${clientId}:${timestamp}`));
         signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
       } catch (e) {
-        console.error('Signing failed', e);
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
       }
     }
   }
@@ -191,34 +233,6 @@ async function signedRequest(action, payload) {
 
   pendingRequests.set(cacheKey, requestPromise);
   return requestPromise;
-}
-
-function validateEmail(email) {
-  if (!email) return true;
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(email);
-}
-
-function validateAICardData(data) {
-  if (!data.phone || String(data.phone).replace(/[^\d]/g, '').length < 6) {
-    return { valid: false, error: 'Invalid or missing phone number' };
-  }
-  if (!data.name || String(data.name).length < 2) {
-    return { valid: false, error: 'Invalid or missing name' };
-  }
-  
-  const phoneDigits = String(data.phone).replace(/[^\d]/g, '');
-  if (/(.)\1{5}/.test(phoneDigits)) {
-    return { valid: false, error: 'Phone number appears invalid (repeated digits)' };
-  }
-  
-  const lowercaseName = String(data.name).toLowerCase();
-  const placeholders = ['john doe', 'jane doe', 'sample', 'example', 'test', 'card holder', 'name', 'customer'];
-  if (placeholders.some(p => lowercaseName.includes(p))) {
-    return { valid: false, warning: 'Name appears generic - please verify' };
-  }
-  
-  return { valid: true };
 }
 
 function exportToCSV(data, filename) {
@@ -307,16 +321,11 @@ function EditLeadModal({ lead, onSave, onClose }) {
   const [form, setForm] = useState(() => sanitizeLead(lead));
   const [errors, setErrors] = useState({});
 
-  const validatePhone = (phone) => {
-    const cleaned = String(phone).replace(/[^\d]/g, '');
-    return cleaned.length >= 10 && cleaned.length <= 13;
-  };
-
   const handleSave = () => {
     const newErrors = {};
     if (!form.name || !form.name.trim()) newErrors.name = 'Name is required';
-    if (!validatePhone(form.phone)) newErrors.phone = 'Invalid phone number';
-    if (form.email && !validateEmail(form.email)) newErrors.email = 'Invalid email';
+    if (!ValidationUtils.phone(form.phone)) newErrors.phone = 'Invalid phone number';
+    if (form.email && !ValidationUtils.email(form.email)) newErrors.email = 'Invalid email';
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -441,7 +450,13 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
         
         setStats({ total, sent, pending, hot, interested, noAnswer, conversionRate });
       } catch (e) {
-        console.error('Stats calculation failed', e);
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
       } finally {
         setLoading(false);
       }
@@ -852,9 +867,15 @@ function App() {
       } else {
         alert("Error: " + json.message);
       }
-    } catch (e) {
-      alert("Failed: " + e.message);
-    } finally {
+      } catch (e) {
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
+      } finally {
       setLoading(false);
       setLoadingMessage("");
     }
@@ -1480,9 +1501,15 @@ function QueueList({ queue, onBack, onSelect, selectedLeads, setSelectedLeads, o
       setEditingLead(null);
       onRefresh();
       vibrate(50);
-    } catch (e) {
-      alert("Failed to update lead");
-    }
+      } catch (e) {
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
+      }
   };
 
   const handleLongPress = (lead) => {
@@ -1707,7 +1734,13 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
           }
         }
       } catch (e) {
-        console.error("Failed to restore position:", e);
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
       }
     }
   }, []); // ✅ Run only once on mount
@@ -2183,7 +2216,7 @@ function CameraScan({ onBack, onScanComplete, clientId }) {
         const json = await res.json();
         
         if (json.status === 'success' && json.data) {
-          const validation = validateAICardData(json.data);
+          const validation = ValidationUtils.aiCardData(json.data);
           
           if (!validation.valid) {
             alert(`⚠️ Card scan issue: ${validation.error || validation.warning}\n\nPlease verify the data carefully or try scanning again.`);
@@ -2358,11 +2391,6 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
       } 
     };
 
-    const validatePhone = (phone) => {
-      const cleaned = String(phone).replace(/\D/g, '');
-      return cleaned.length >= 10 && cleaned.length <= 13;
-    };
-
     const toggleSelect = (index) => {
       const newSelected = new Set(selectedLeads);
       if (newSelected.has(index)) {
@@ -2386,8 +2414,8 @@ function BulkPasteForm({ initialData, clientId, onBack, onSubmit }) {
         if (!selectedLeads.has(i)) return;
         
         if (!l.name || !l.name.trim()) newErrors[`${i}-name`] = true;
-        if (!validatePhone(l.phone)) newErrors[`${i}-phone`] = true;
-        if (l.email && !validateEmail(l.email)) newErrors[`${i}-email`] = true;
+        if (!ValidationUtils.phone(l.phone)) newErrors[`${i}-phone`] = true;
+        if (l.email && !ValidationUtils.email(l.email)) newErrors[`${i}-email`] = true;
         
         if (!newErrors[`${i}-name`] && !newErrors[`${i}-phone`]) {
           leadsToSubmit.push(l);
@@ -2568,11 +2596,6 @@ function ManualForm({ prefill, onBack, onSubmit }) {
     recognition.start(); 
   };
 
-  const validatePhone = (phone) => {
-    const cleaned = String(phone).replace(/\D/g, '');
-    return cleaned.length >= 10 && cleaned.length <= 13;
-  };
-
   const checkDuplicate = async (phone) => {
     try {
       const res = await signedRequest("CHECK_DUPLICATE", {
@@ -2589,8 +2612,8 @@ function ManualForm({ prefill, onBack, onSubmit }) {
   const handleSubmit = async () => {
     const newErrors = {};
     if (!form.name || !form.name.trim()) newErrors.name = "Name is required";
-    if (!validatePhone(form.phone)) newErrors.phone = "Invalid phone number (10-13 digits)";
-    if (form.email && !validateEmail(form.email)) newErrors.email = "Invalid email format";
+    if (!ValidationUtils.phone(form.phone)) newErrors.phone = "Invalid phone number (10-13 digits)";
+    if (form.email && !ValidationUtils.email(form.email)) newErrors.email = "Invalid email format";
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -2611,7 +2634,13 @@ function ManualForm({ prefill, onBack, onSubmit }) {
       setErrors({});
       vibrate(100);
     } catch (e) {
-      alert("Failed to save lead");
+      if (e.message.includes('Rate Limit')) {
+        alert('⏳ Too many requests. Please wait 1 minute and try again.');
+      } else if (e.message.includes('Network')) {
+        alert('📡 Connection error. Check your internet and try again.');
+      } else {
+        alert('❌ Something went wrong: ' + e.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -2780,7 +2809,7 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
     
     const saveProfile = async () => {
       // Validate PIN
-      if (form.pin && !/^\d{4}$/.test(form.pin)) {
+      if (form.pin && !ValidationUtils.pin(form.pin)) {
         setPinError("PIN must be exactly 4 digits");
         return;
       }
@@ -2876,12 +2905,17 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
                    <input 
                      type="text" 
                      inputMode="numeric"
-                     maxLength={4}
+                     maxLength={PIN_MAX_LENGTH}
                      value={form.pin} 
                      onChange={e=>{
                        const val = e.target.value.replace(/\D/g, '');
                        setForm({...form, pin: val});
                        setPinError("");
+                     }}
+                     onKeyDown={e => {
+                       if (e.key === 'Enter' && form.pin.length === PIN_MAX_LENGTH) {
+                         saveProfile();
+                       }
                      }} 
                      placeholder="4-Digit PIN" 
                      className={`flex-1 p-2 rounded border text-sm outline-none font-mono tracking-widest text-center ${pinError ? 'border-red-500 bg-red-50' : ''}`}
@@ -3012,23 +3046,49 @@ function BioLinkCard({ profile }) {
 function PinScreen({ clientId, onSuccess }) {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [attemptsRemaining, setAttemptsRemaining] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!ValidationUtils.pin(pin)) {
+      setError("PIN must be exactly 4 digits");
+      return;
+    }
+    
     setLoading(true);
+    setError("");
+    
     try {
       const res = await signedRequest("VERIFY_PIN", { client_id: clientId, pin });
       const json = await res.json();
+      
       if (json.status === 'success') {
         if (json.secret) safeStorage.setItem(`thrivoy_secret_${clientId}`, json.secret);
         vibrate(100);
         onSuccess();
       } else {
-        alert("Invalid PIN");
+        // Parse attempts remaining from error message
+        const attemptsMatch = json.message?.match(/(\d+) attempt/);
+        if (attemptsMatch) {
+          const remaining = parseInt(attemptsMatch[1]);
+          setAttemptsRemaining(remaining);
+          setError(`Incorrect PIN. ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} remaining.`);
+        } else {
+          setError(json.message || "Invalid PIN");
+        }
         setPin("");
+        vibrate(200);
       }
     } catch (e) {
-      alert("Error: " + e.message);
+      if (e.message.includes('Rate Limit')) {
+        setError("Too many attempts. Please wait 1 minute.");
+      } else if (e.message.includes('locked')) {
+        setError("Account locked. Please contact support.");
+      } else {
+        setError("Connection error. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -3044,16 +3104,32 @@ function PinScreen({ clientId, onSuccess }) {
         <p className="text-gray-500 mb-8 text-sm">Secure access to your workspace</p>
         
         <form onSubmit={handleSubmit}>
-          <input
-            type="password"
-            inputMode="numeric"
-            maxLength={4}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-            className="w-full p-4 text-center text-2xl font-bold tracking-widest bg-gray-50 rounded-xl border-2 border-gray-200 outline-none focus:border-blue-500 transition-colors mb-6"
-            placeholder="••••"
-            autoFocus
-          />
+            <div className="mb-6">
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={PIN_MAX_LENGTH}
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value.replace(/\D/g, ""));
+                setError("");
+              }}
+              className={`w-full p-4 text-center text-2xl font-bold tracking-widest bg-gray-50 rounded-xl border-2 outline-none transition-colors ${
+                error ? 'border-red-500 bg-red-50' : 'border-gray-200 focus:border-blue-500'
+              }`}
+              placeholder="••••"
+              autoFocus
+              disabled={loading}
+            />
+            {error && (
+              <p className="text-red-600 text-sm mt-2 text-center font-medium">{error}</p>
+            )}
+            {attemptsRemaining !== null && attemptsRemaining <= 2 && (
+              <p className="text-orange-600 text-xs mt-1 text-center">
+                ⚠️ Warning: Only {attemptsRemaining} {attemptsRemaining === 1 ? 'attempt' : 'attempts'} left
+              </p>
+            )}
+          </div>
           <button
             type="submit"
             disabled={pin.length !== 4 || loading}
@@ -3098,7 +3174,15 @@ function AdminDashboard() {
          } else {
             alert("Error: " + json.message);
          }
-      } catch(e) { alert("Failed: " + e.message); }
+      } catch (e) {
+        if (e.message.includes('Rate Limit')) {
+          alert('⏳ Too many requests. Please wait 1 minute and try again.');
+        } else if (e.message.includes('Network')) {
+          alert('📡 Connection error. Check your internet and try again.');
+        } else {
+          alert('❌ Something went wrong: ' + e.message);
+        }
+      }
       finally { setLoading(false); }
    };
 
@@ -3166,35 +3250,14 @@ function AdminDashboard() {
 }
 
 function AdminLogin({ onLogin }) {
-  const [pw, setPw] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (pw.trim() === ADMIN_PASSWORD) {
-      onLogin();
-    } else {
-      alert(`Access Denied. You typed: '${pw}'`);
-    }
-  };
-
   return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
       <Lock size={48} className="mb-6 text-orange-500" />
-      <h2 className="text-xl font-bold mb-6">Thrivoy Admin</h2>
-      
-      <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
-        <input
-          type="password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          className="w-full p-4 rounded-xl bg-slate-800 text-center text-white font-bold tracking-widest outline-none border border-slate-700 focus:border-orange-500 transition-colors"
-          placeholder="ENTER CODE"
-          autoFocus
-        />
-        <button type="submit" className="w-full py-4 bg-orange-600 rounded-xl font-bold hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20 active:scale-95">
-          UNLOCK
-        </button>
-      </form>
+      <h2 className="text-xl font-bold mb-6">Admin Access Moved</h2>
+      <p className="text-gray-400 text-center max-w-sm">
+        Admin functions now require backend authentication. 
+        Please use the secure admin portal.
+      </p>
     </div>
   );
 }
@@ -3247,8 +3310,13 @@ function LandingPage() {
         alert("Quick start failed: " + (json.message || "Unknown error"));
       }
     } catch (e) {
-      alert("Quick start failed. Please try again or use manual signup.");
-      console.error(e);
+      if (e.message.includes('Rate Limit')) {
+        alert('⏳ Too many requests. Please wait 1 minute and try again.');
+      } else if (e.message.includes('Network')) {
+        alert('📡 Connection error. Check your internet and try again.');
+      } else {
+        alert('❌ Something went wrong: ' + e.message);
+      }
     } finally {
       setLoading(false);
     }
