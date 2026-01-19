@@ -2841,7 +2841,7 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
                    <div className="flex justify-between"><span>✓ Unlimited Leads</span><span className="font-bold">₹999/mo</span></div>
                    <div className="flex justify-between"><span>✓ AI Rewriting</span></div>
                  </div>
-                 <button onClick={() => window.open(`https://wa.me/919999999999?text=Upgrade Request%0AClient ID: ${clientId}`)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Contact to Upgrade</button>
+                 <button onClick={() => window.open(`https://wa.me/917892159170?text=Upgrade Request%0AClient ID: ${clientId}`)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Contact to Upgrade</button>
                  <p className="text-xs text-gray-500 mt-2 text-center">Pay via UPI • Instant activation</p>
                </>
              )}
