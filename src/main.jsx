@@ -403,17 +403,41 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const calculateStats = () => {
+    const calculateStats = async () => {
       setLoading(true);
       try {
-        const safeQueue = Array.isArray(queue) ? queue.map(sanitizeLead) : [];
-        const total = safeQueue.length;
-        const sent = safeQueue.filter(l => l.status && l.status !== 'PENDING').length;
-        const pending = safeQueue.filter(l => !l.status || l.status === 'PENDING').length;
-        const hot = safeQueue.filter(l => String(l.tags).toLowerCase().includes('hot')).length;
-        const interested = safeQueue.filter(l => String(l.outcome).toLowerCase().includes('interested')).length;
-        const noAnswer = safeQueue.filter(l => String(l.outcome).toLowerCase().includes('no answer')).length;
+        // ✅ Fetch ALL leads from backend for accurate analytics
+        const res = await signedRequest("GET_QUEUE", { client_id: clientId });
+        const json = await res.json();
+        
+        const allLeads = json.data?.allLeads || json.data?.queue || [];
+        const safeLeads = Array.isArray(allLeads) ? allLeads.map(sanitizeLead) : [];
+        
+        console.log('Analytics - All Leads:', safeLeads);
+        
+        const total = safeLeads.length;
+        const sent = safeLeads.filter(l => l.status && l.status !== 'PENDING').length;
+        const pending = safeLeads.filter(l => !l.status || l.status === 'PENDING').length;
+        const hot = safeLeads.filter(l => {
+          const tags = String(l.tags || '').toLowerCase();
+          return tags.includes('hot');
+        }).length;
+        
+        const interested = safeLeads.filter(l => {
+          const outcome = String(l.outcome || '').toLowerCase();
+          const status = String(l.status || '').toLowerCase();
+          return outcome.includes('interested') || status.includes('interested');
+        }).length;
+        
+        const noAnswer = safeLeads.filter(l => {
+          const outcome = String(l.outcome || '').toLowerCase();
+          const status = String(l.status || '').toLowerCase();
+          return outcome.includes('no answer') || status.includes('no answer');
+        }).length;
+        
         const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
+        
+        console.log('Analytics Stats:', { total, sent, pending, hot, interested, noAnswer, conversionRate });
         
         setStats({ total, sent, pending, hot, interested, noAnswer, conversionRate });
       } catch (e) {
@@ -424,7 +448,7 @@ function AnalyticsScreen({ clientId, queue, onBack }) {
     };
     
     calculateStats();
-  }, [queue]);
+  }, [clientId]);
 
   if (loading) {
     return (
@@ -655,6 +679,7 @@ function App() {
   const [publicProfile, setPublicProfile] = useState(null);
   
   const [queue, setQueue] = useState([]);
+  const [allLeads, setAllLeads] = useState([]);
   const [stats, setStats] = useState({ today: 0 });
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
@@ -763,33 +788,33 @@ function App() {
       const res = await signedRequest("GET_QUEUE", { client_id: id });
       const json = await res.json();
       
-      // 🔍 DEBUG: Log the API response
       console.log('=== FETCH QUEUE DEBUG ===');
       console.log('API Response:', json);
       console.log('Queue Data:', json.data?.queue);
-      console.log('Queue Length:', json.data?.queue?.length);
-      console.log('Stats Data:', json.data?.stats);
+      console.log('All Leads Data:', json.data?.allLeads); // ✅ ADD THIS
       console.log('========================');
       
       if (json.data) {
-        // CRITICAL FIX: Ensure queue is always an array
         const queueData = json.data.queue;
         const processedQueue = Array.isArray(queueData) ? queueData.map(sanitizeLead) : [];
-        
-        console.log('Processed Queue:', processedQueue);
         setQueue(processedQueue);
         
-        // CRITICAL FIX: Ensure stats is always an object with proper structure
+        // ✅ ADD THIS: Process all leads for analytics
+        const allLeadsData = json.data.allLeads || queueData;
+        const processedAllLeads = Array.isArray(allLeadsData) ? allLeadsData.map(sanitizeLead) : [];
+        setAllLeads(processedAllLeads);
+        
         const statsData = json.data.stats;
         setStats(statsData && typeof statsData === 'object' ? { today: statsData.today || 0 } : { today: 0 });
       } else {
-        console.warn('No data in API response');
         setQueue([]);
+        setAllLeads([]); // ✅ ADD THIS
         setStats({ today: 0 });
       }
     } catch (e) {
       console.error("Fetch queue error:", e);
       setQueue([]);
+      setAllLeads([]); // ✅ ADD THIS
       setStats({ today: 0 });
     } finally {
       setLoading(false);
@@ -1013,7 +1038,7 @@ function App() {
       {view === "analytics" && (
         <AnalyticsScreen 
           clientId={clientId}
-          queue={queue}
+          queue={allLeads} // ✅ CHANGE: Pass allLeads instead of queue
           onBack={() => setView("menu")}
         />
       )}
@@ -1072,6 +1097,7 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
 
   console.log('MenuScreen - Queue:', safeQueue);
   console.log('MenuScreen - Queue Length:', usage);
+  console.log('MenuScreen - User Plan:', userProfile?.plan);
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-safe">
@@ -1086,13 +1112,29 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
           </div>
       </header>
       
-      <main className="p-4 space-y-4 animate-in fade-in">
-         {isFree && usage >= 40 && (
-          <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 p-4 rounded-2xl shadow-lg animate-pulse">
+        <main className="p-4 space-y-4 animate-in fade-in">
+          {/* ✅ FIX: Check plan status properly */}
+          {isFree && usage >= 40 && (
+            <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 p-4 rounded-2xl shadow-lg animate-pulse">
             <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center"><AlertTriangle size={20} className="text-white"/></div>
                 <div className="flex-1"><p className="font-black text-red-700">Storage Critical!</p><p className="text-xs text-gray-600">Only {100 - usage} slots remaining</p></div>
             </div>
+
+          {/* ✅ ADD: Show Pro badge for Pro users */}
+          {!isFree && (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 p-4 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                  <Sparkles size={20} className="text-white"/>
+                </div>
+                <div className="flex-1">
+                  <p className="font-black text-green-700">Pro Plan Active</p>
+                  <p className="text-xs text-gray-600">Unlimited leads & full AI features</p>
+                </div>
+              </div>
+            </div>
+          )}
             <div className="bg-white rounded-lg p-2 mb-2">
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-orange-500 to-red-600 transition-all" style={{width: `${percentUsed}%`}}></div>
@@ -1114,17 +1156,23 @@ function MenuScreen({ queue, stats, loading, onViewChange, onUpload, onRefresh, 
          </button>
 
          <button 
-           onClick={() => {
-             console.log('Active Queue Clicked - Queue:', safeQueue);
-             onViewChange("list");
-           }} 
-           className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors"
-         >
-             <div className="flex items-center gap-3">
-                 <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><ListIcon size={20}/></div>
-                 <div className="text-left"><p className="font-bold text-gray-800">Active Queue</p><p className="text-xs text-gray-500">{usage} / {LEAD_LIMIT} leads</p></div>
-             </div>
-             <ChevronRight size={20} className="text-gray-300"/>
+          onClick={() => {
+            console.log('Active Queue Clicked - Queue:', safeQueue);
+            onViewChange("list");
+          }} 
+          className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors"
+        >
+            <div className="flex items-center gap-3">
+                <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><ListIcon size={20}/></div>
+                <div className="text-left">
+                  <p className="font-bold text-gray-800">Active Queue</p>
+                  {/* ✅ FIX: Don't show limit for Pro users */}
+                  <p className="text-xs text-gray-500">
+                    {isFree ? `${usage} / ${LEAD_LIMIT} leads` : `${usage} leads`}
+                  </p>
+                </div>
+            </div>
+            <ChevronRight size={20} className="text-gray-300"/>
          </button>
 
          <button onClick={() => onViewChange("analytics")} className="w-full bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors">
