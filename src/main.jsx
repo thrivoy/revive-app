@@ -2775,6 +2775,9 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
     const [pinError, setPinError] = useState("");
     const [showPinGenerator, setShowPinGenerator] = useState(false);
     
+    // ✅ ADD THIS: Check if user is Pro
+    const isPro = userProfile?.plan === "Pro";
+    
     const saveProfile = async () => {
       // Validate PIN
       if (form.pin && !/^\d{4}$/.test(form.pin)) {
@@ -2819,9 +2822,20 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
            </div>
            <h1 className="text-2xl font-bold mb-6">Settings</h1>
            
-           <div className="mb-8 p-4 border-2 border-green-200 rounded-xl bg-green-50">
-             <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard size={16} className="text-green-600"/> Upgrade to Pro</h3>
-             {userProfile.plan === "Free" ? (
+           {/* ✅ FIXED: Show correct plan status */}
+           <div className={`mb-8 p-4 border-2 rounded-xl ${isPro ? 'border-green-200 bg-green-50' : 'border-green-200 bg-green-50'}`}>
+             <h3 className="font-bold mb-4 flex items-center gap-2">
+               <CreditCard size={16} className={isPro ? "text-green-600" : "text-green-600"}/> 
+               {isPro ? "Subscription Status" : "Upgrade to Pro"}
+             </h3>
+             
+             {isPro ? (
+               <div className="text-center py-4">
+                 <CheckCircle2 size={48} className="text-green-600 mx-auto mb-2"/>
+                 <p className="font-bold text-green-700">Pro Plan Active</p>
+                 <p className="text-sm text-gray-600 mt-1">Unlimited leads & full AI features</p>
+               </div>
+             ) : (
                <>
                  <div className="mb-4 space-y-2 text-sm">
                    <div className="flex justify-between"><span>✓ Unlimited Leads</span><span className="font-bold">₹999/mo</span></div>
@@ -2830,11 +2844,6 @@ function SettingsForm({ template, setTemplate, library, setLibrary, userProfile,
                  <button onClick={() => window.open(`https://wa.me/919999999999?text=Upgrade Request%0AClient ID: ${clientId}`)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">Contact to Upgrade</button>
                  <p className="text-xs text-gray-500 mt-2 text-center">Pay via UPI • Instant activation</p>
                </>
-             ) : (
-               <div className="text-center py-4">
-                 <CheckCircle2 size={48} className="text-green-600 mx-auto mb-2"/>
-                 <p className="font-bold text-green-700">Pro Plan Active</p>
-               </div>
              )}
            </div>
            
