@@ -51,7 +51,7 @@ function sanitizeValue(val, type = 'string') {
 function sanitizeLead(lead) {
   if (!lead || typeof lead !== 'object') {
     return {
-      lead_id: 'invalid-' + Date.now(),  // Changed from leadid
+      lead_id: 'invalid-' + Date.now(),
       name: 'Invalid Lead',
       phone: '',
       email: '',
@@ -64,8 +64,12 @@ function sanitizeLead(lead) {
       outcome: ''
     };
   }
+  
+  // ✅ FIX: Handle both lead_id and leadid during transition
+  const leadId = lead.lead_id || lead.leadid || 'unknown-' + Date.now();
+  
   return {
-    lead_id: sanitizeValue(lead.lead_id, 'string'),  // Changed from leadid
+    lead_id: leadId,  // ✅ Always output lead_id (underscore)
     name: sanitizeValue(lead.name, 'string') || 'Unknown',
     phone: sanitizeValue(lead.phone, 'string'),
     email: sanitizeValue(lead.email, 'string'),
@@ -1719,7 +1723,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     return tpl.replace("{{name}}", lead.name || "").replace("{{context}}", ctx || "");
   }, [template, library]);
 
-  // Check for saved position on mount ONLY
+  // ✅ FIX: Only run once on mount
   useEffect(() => {
     const savedPosition = safeStorage.getItem(`queue_position_${clientId}`);
     if (savedPosition && !initialLead) {
@@ -1734,16 +1738,10 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
           }
         }
       } catch (e) {
-        if (e.message.includes('Rate Limit')) {
-          alert('⏳ Too many requests. Please wait 1 minute and try again.');
-        } else if (e.message.includes('Network')) {
-          alert('📡 Connection error. Check your internet and try again.');
-        } else {
-          alert('❌ Something went wrong: ' + e.message);
-        }
+        console.error("Resume error:", e);
       }
     }
-  }, []); // ✅ Run only once on mount
+  }, []); // Run only once on mount
 
   // ✅ FIX: Only update message when active lead changes
   useEffect(() => {
@@ -1764,7 +1762,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     controls.set({ x: 0, opacity: 1 });
   }, [active?.lead_id]); // ✅ Only depend on lead_id
 
-  // Cache user edits to message
+  // ✅ FIX: Debounced cache update for user edits
   useEffect(() => {
     if (!active || !msg) return;
     
@@ -1776,7 +1774,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
       
       return () => clearTimeout(timeoutId);
     }
-  }, [msg]); // ✅ Only depend on msg
+  }, [msg]); // Only depend on msg
 
   const next = () => {
     const idx = safeQueue.findIndex(l => l.lead_id === active.lead_id);
@@ -1795,11 +1793,14 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     setLastAction({ lead: active, outcome });
     setShowUndo(true);
     setTimeout(() => setShowUndo(false), 3000);
+    
+    // ✅ FIX: Filter using lead_id
     setQueue(prev => Array.isArray(prev) ? prev.filter(l => l.lead_id !== active.lead_id) : []);
+    
     try {
       await signedRequest("MARK_SENT", {
         client_id: clientId,
-        lead_id: active.lead_id,
+        lead_id: active.lead_id, // ✅ Uses lead_id
         outcome
       });
     } catch (e) {
@@ -1819,7 +1820,7 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
     try {
       await signedRequest("MARK_SENT", {
         client_id: clientId,
-        lead_id: lastAction.lead.lead_id,
+        lead_id: lastAction.lead.lead_id, // ✅ Uses lead_id
         outcome: "UNDO"
       });
     } catch (e) {
@@ -1832,9 +1833,9 @@ function CardStack({ queue, setQueue, template, library, clientId, onBack, initi
 
   const handlePause = () => {
     const position = {
-      leadId: active.lead_id,
+      leadId: active.lead_id, // ✅ Uses lead_id
       timestamp: Date.now(),
-      queueSnapshot: safeQueue.map(l => l.lead_id)
+      queueSnapshot: safeQueue.map(l => l.lead_id) // ✅ Uses lead_id
     };
     
     safeStorage.setItem(`queue_position_${clientId}`, JSON.stringify(position));
