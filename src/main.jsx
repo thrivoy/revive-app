@@ -3265,11 +3265,11 @@ function AdminLogin({ onLogin }) {
 
 function LandingPage() {
   const [loading, setLoading] = useState(false);
+  const [keyValue, setKeyValue] = useState("");
 
   const handleLogin = (e) => {
     e.preventDefault();
-    const k = e.target.key.value;
-    if(k) window.location.search = `?key=${k}`;
+    if(keyValue) window.location.search = `?key=${keyValue}`;
   };
 
   const handleQuickStart = async () => {
@@ -3292,10 +3292,8 @@ function LandingPage() {
       if (json.status === 'success') {
         const { key, pin } = json.data;
         
-        // Store credentials
         safeStorage.setItem("thrivoy_client_id", key);
         
-        // Show credentials in a better modal
         const credentialsMsg = `🎉 Account Created Successfully!\n\n` +
                               `SAVE THESE CREDENTIALS:\n\n` +
                               `🔑 Access Key: ${key}\n` +
@@ -3304,8 +3302,6 @@ function LandingPage() {
                               `Screenshot this message!`;
         
         alert(credentialsMsg);
-        
-        // Redirect to login with key
         window.location.search = `?key=${key}`;
       } else {
         alert("Quick start failed: " + (json.message || "Unknown error"));
@@ -3326,7 +3322,7 @@ function LandingPage() {
   const scrollToLogin = () => {
     const el = document.getElementById('login-form');
     if(el) {
-       const y = el.getBoundingClientRect().top + window.pageYOffset - 150;
+       const y = el.getBoundingClientRect().top + window.pageYOffset - 100;
        window.scrollTo({top: y, behavior: 'smooth'});
     }
   };
@@ -3335,8 +3331,8 @@ function LandingPage() {
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100">
       
       {loading && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4">
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4 w-full">
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent"></div>
             <p className="font-bold text-gray-900 text-center">Creating your account...</p>
             <p className="text-sm text-gray-500 text-center">This will only take a moment</p>
@@ -3344,23 +3340,28 @@ function LandingPage() {
         </div>
       )}
 
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-black text-xl tracking-tight">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg shadow-blue-200 shadow-lg">T</div>
-            Thrivoy
+      {/* Sticky Navigation */}
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-black text-lg sm:text-xl tracking-tight">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg shadow-lg shadow-blue-200">T</div>
+            <span className="hidden xs:inline">Thrivoy</span>
           </div>
-          <button onClick={scrollToLogin} className="text-sm font-bold bg-gray-900 text-white px-5 py-2 rounded-full hover:bg-black transition-colors">
+          <button 
+            onClick={scrollToLogin} 
+            className="text-xs sm:text-sm font-bold bg-gray-900 text-white px-4 sm:px-5 py-2 rounded-full hover:bg-black transition-colors"
+          >
             Member Login
           </button>
         </div>
       </nav>
 
-      <header className="relative pt-20 pb-32 overflow-hidden bg-gradient-to-b from-white to-gray-50/50">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-100/40 rounded-full blur-[100px] -z-10"></div>
+      {/* Hero Section */}
+      <header className="relative pt-12 sm:pt-20 pb-20 sm:pb-32 overflow-hidden bg-gradient-to-b from-white to-gray-50/50">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] sm:w-[800px] h-[400px] sm:h-[500px] bg-blue-100/40 rounded-full blur-[100px] -z-10"></div>
         
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <div className="inline-flex items-center gap-2 mb-6 sm:mb-8 px-3 sm:px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase tracking-wider shadow-sm">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
@@ -3368,33 +3369,33 @@ function LandingPage() {
             v2.0 Now Live for India
           </div>
           
-          <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-gray-900 leading-[1.1]">
+          <h1 className="text-3xl sm:text-5xl md:text-7xl font-black mb-4 sm:mb-6 tracking-tight text-gray-900 leading-[1.1] px-2">
             Stop managing leads.<br/>
             Start <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">closing deals</span>.
           </h1>
           
-          <p className="text-xl text-gray-500 mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-gray-500 mb-8 sm:mb-10 max-w-2xl mx-auto leading-relaxed px-4">
             The secret weapon for Real Estate, Insurance, and Sales pros. 
             Ditch the diaries and messy Excel sheets.
           </p>
 
-          {/* Quick Start Section - NEW */}
-          <div className="mb-8 max-w-md mx-auto">
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg">
+          {/* Quick Start Section */}
+          <div className="mb-6 sm:mb-8 max-w-md mx-auto px-4">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-4 sm:p-6 shadow-lg">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
-                  <Zap size={24} className="text-white" fill="currentColor"/>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Zap size={20} className="sm:w-6 sm:h-6 text-white" fill="currentColor"/>
                 </div>
                 <div className="text-left">
-                  <h3 className="font-bold text-lg text-gray-900">New User?</h3>
-                  <p className="text-sm text-gray-600">Get instant access - no signup required</p>
+                  <h3 className="font-bold text-base sm:text-lg text-gray-900">New User?</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Get instant access - no signup required</p>
                 </div>
               </div>
               
               <button 
                 onClick={handleQuickStart}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 sm:py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {loading ? (
                   <>
@@ -3408,7 +3409,7 @@ function LandingPage() {
                 )}
               </button>
               
-              <div className="mt-3 flex items-center justify-center gap-4 text-xs text-gray-600">
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-xs text-gray-600">
                 <span className="flex items-center gap-1">
                   <CheckCircle2 size={12} className="text-green-600"/>
                   Instant access
@@ -3425,157 +3426,183 @@ function LandingPage() {
             </div>
           </div>
 
-          {/* Existing Login Form */}
-          <div className="relative">
+          {/* Login Section - FIXED */}
+          <div className="relative px-4">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200"></div>
             </div>
-            <div className="relative flex justify-center text-sm mb-6">
+            <div className="relative flex justify-center text-xs sm:text-sm mb-4 sm:mb-6">
               <span className="px-4 bg-white text-gray-500 font-medium">or login with your key</span>
             </div>
           </div>
 
-          <div id="login-form" className="scroll-mt-32 bg-white p-3 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 max-w-md mx-auto transform hover:scale-[1.01] transition-transform duration-300">
-            <form onSubmit={handleLogin} className="flex gap-2">
+          <div id="login-form" className="scroll-mt-24 sm:scroll-mt-32 max-w-md mx-auto px-4">
+            <form onSubmit={handleLogin} className="bg-white p-4 sm:p-6 rounded-2xl shadow-2xl shadow-blue-900/10 border border-gray-200 space-y-3">
               <input 
-                name="key" 
+                name="key"
+                value={keyValue}
+                onChange={(e) => setKeyValue(e.target.value)}
                 placeholder="Enter Invite Key" 
-                className="flex-1 bg-gray-50 text-gray-900 font-bold px-6 py-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:font-medium placeholder:text-gray-400"
+                className="w-full bg-gray-50 text-gray-900 font-bold px-4 sm:px-6 py-3 sm:py-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:font-medium placeholder:text-gray-400 text-sm sm:text-base"
               />
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-lg shadow-blue-200">
+              <button 
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200 text-sm sm:text-base"
+              >
                 Enter <ArrowLeft size={18} className="rotate-180"/>
               </button>
             </form>
           </div>
-          <p className="mt-6 text-sm text-gray-500 font-medium">
-            Don't have a key? <a href="https://wa.me/919999999999?text=I want Thrivoy access" className="text-blue-600 hover:underline">Request access</a>
+
+          <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500 font-medium px-4">
+            Don't have a key? <a href="https://wa.me/917892159170?text=I want Thrivoy access" className="text-blue-600 hover:underline">Request access</a>
           </p>
         </div>
       </header>
 
-      <section className="py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-black mb-4 text-gray-900">3 Steps to Revenue</h2>
-            <p className="text-gray-500">Simple enough for beginners. Powerful enough for top tier agents.</p>
+      {/* 3 Steps Section */}
+      <section className="py-12 sm:py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl font-black mb-3 sm:mb-4 text-gray-900">3 Steps to Revenue</h2>
+            <p className="text-sm sm:text-base text-gray-500 px-4">Simple enough for beginners. Powerful enough for top tier agents.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-12 relative">
-            <div className="hidden md:block absolute top-12 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-gray-200 via-blue-200 to-gray-200 -z-10"></div>
+          <div className="grid sm:grid-cols-3 gap-8 sm:gap-12 relative">
+            <div className="hidden sm:block absolute top-12 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-gray-200 via-blue-200 to-gray-200 -z-10"></div>
 
             <div className="text-center bg-white">
-              <div className="w-24 h-24 mx-auto bg-blue-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
-                <Upload size={32} className="text-blue-600"/>
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-blue-50 rounded-full flex items-center justify-center mb-4 sm:mb-6 border-4 border-white shadow-lg">
+                <Upload size={28} className="sm:w-8 sm:h-8 text-blue-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-2">1. Dump the Data</h3>
+              <h3 className="text-lg sm:text-xl font-bold mb-2">1. Dump the Data</h3>
               <p className="text-gray-500 text-sm px-4">Paste messy WhatsApp lists, forward emails, or upload CSVs. Our AI cleans it instantly.</p>
             </div>
 
             <div className="text-center bg-white">
-              <div className="w-24 h-24 mx-auto bg-purple-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
-                <Wand2 size={32} className="text-purple-600"/>
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-purple-50 rounded-full flex items-center justify-center mb-4 sm:mb-6 border-4 border-white shadow-lg">
+                <Wand2 size={28} className="sm:w-8 sm:h-8 text-purple-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-2">2. AI Sorting</h3>
+              <h3 className="text-lg sm:text-xl font-bold mb-2">2. AI Sorting</h3>
               <p className="text-gray-500 text-sm px-4">Thrivoy identifies hot leads, categorizes them, and queues them up for calling.</p>
             </div>
 
             <div className="text-center bg-white">
-              <div className="w-24 h-24 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
-                <CheckCircle2 size={32} className="text-green-600"/>
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-4 sm:mb-6 border-4 border-white shadow-lg">
+                <CheckCircle2 size={28} className="sm:w-8 sm:h-8 text-green-600"/>
               </div>
-              <h3 className="text-xl font-bold mb-2">3. Close & Repeat</h3>
+              <h3 className="text-lg sm:text-xl font-bold mb-2">3. Close & Repeat</h3>
               <p className="text-gray-500 text-sm px-4">Speed dial through your list. Send WhatsApp follow-ups in 1 click. Double your speed.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-24 bg-gray-50 border-y border-gray-200">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-black mb-4 text-gray-900">Simple, Transparent Pricing</h2>
-            <p className="text-gray-500">Pay for performance. Cancel anytime.</p>
+      {/* Pricing Section */}
+      <section className="py-16 sm:py-24 bg-gray-50 border-y border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl font-black mb-3 sm:mb-4 text-gray-900">Simple, Transparent Pricing</h2>
+            <p className="text-sm sm:text-base text-gray-500">Pay for performance. Cancel anytime.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto items-center">
+          <div className="grid sm:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto items-center">
             
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
-              <h3 className="font-bold text-lg text-gray-500 mb-2">Starter</h3>
-              <div className="text-4xl font-black mb-6">Free</div>
-              <ul className="space-y-4 mb-8 text-left text-sm text-gray-600">
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 100 Leads Capacity</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Basic Calling Queue</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> 1 Digital Card</li>
-                <li className="flex items-center gap-2 opacity-50"><X size={16}/> No AI Rewriting</li>
+            {/* Free Plan */}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
+              <h3 className="font-bold text-base sm:text-lg text-gray-500 mb-2">Starter</h3>
+              <div className="text-3xl sm:text-4xl font-black mb-4 sm:mb-6">Free</div>
+              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 text-left text-xs sm:text-sm text-gray-600">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> 100 Leads Capacity</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> Basic Calling Queue</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> 1 Digital Card</li>
+                <li className="flex items-center gap-2 opacity-50"><X size={16} className="flex-shrink-0"/> No AI Rewriting</li>
               </ul>
-              <button onClick={handleQuickStart} disabled={loading} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <button 
+                onClick={handleQuickStart} 
+                disabled={loading} 
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base"
+              >
                 {loading ? "Creating..." : "Start Free"}
               </button>
             </div>
 
-            <div className="bg-gray-900 text-white p-8 rounded-3xl shadow-2xl relative transform scale-105 z-10">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-b-lg">MOST POPULAR</div>
-              <h3 className="font-bold text-lg text-gray-400 mb-2 mt-2">Pro Agent</h3>
-              <div className="text-5xl font-black mb-1">₹999<span className="text-lg font-medium text-gray-500">/mo</span></div>
-              <p className="text-gray-400 text-xs mb-6">Billed annually</p>
+            {/* Pro Plan */}
+            <div className="bg-gray-900 text-white p-6 sm:p-8 rounded-3xl shadow-2xl relative transform sm:scale-105 z-10">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[10px] sm:text-xs font-bold px-3 py-1 rounded-b-lg">MOST POPULAR</div>
+              <h3 className="font-bold text-base sm:text-lg text-gray-400 mb-2 mt-2">Pro Agent</h3>
+              <div className="text-4xl sm:text-5xl font-black mb-1">₹999<span className="text-base sm:text-lg font-medium text-gray-500">/mo</span></div>
+              <p className="text-gray-400 text-xs mb-4 sm:mb-6">Billed annually</p>
               
-              <ul className="space-y-4 mb-8 text-left text-sm">
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Unlimited Leads</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Full AI Suite</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Hot Lead Vault</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> WhatsApp Integration</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400"/> Priority Support</li>
+              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 text-left text-xs sm:text-sm">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400 flex-shrink-0"/> Unlimited Leads</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400 flex-shrink-0"/> Full AI Suite</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400 flex-shrink-0"/> Hot Lead Vault</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400 flex-shrink-0"/> WhatsApp Integration</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400 flex-shrink-0"/> Priority Support</li>
               </ul>
-              <button onClick={scrollToLogin} className="w-full py-4 rounded-xl bg-blue-600 font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/50">Get Started</button>
+              <button 
+                onClick={scrollToLogin} 
+                className="w-full py-3 sm:py-4 rounded-xl bg-blue-600 font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/50 text-sm sm:text-base"
+              >
+                Get Started
+              </button>
             </div>
 
-            <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
-              <h3 className="font-bold text-lg text-gray-500 mb-2">Teams</h3>
-              <div className="text-4xl font-black mb-6">Custom</div>
-              <ul className="space-y-4 mb-8 text-left text-sm text-gray-600">
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Everything in Pro</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Team Dashboard</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Lead Distribution</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> Performance Analytics</li>
+            {/* Teams Plan */}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-gray-200 shadow-sm text-center">
+              <h3 className="font-bold text-base sm:text-lg text-gray-500 mb-2">Teams</h3>
+              <div className="text-3xl sm:text-4xl font-black mb-4 sm:mb-6">Custom</div>
+              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 text-left text-xs sm:text-sm text-gray-600">
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> Everything in Pro</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> Team Dashboard</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> Lead Distribution</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500 flex-shrink-0"/> Performance Analytics</li>
               </ul>
-              <button onClick={() => window.open("https://wa.me/919999999999?text=I want Teams plan")} className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors">Contact Sales</button>
+              <button 
+                onClick={() => window.open("https://wa.me/917892159170?text=I want Teams plan")} 
+                className="w-full py-3 rounded-xl border-2 border-gray-200 font-bold hover:bg-gray-50 transition-colors text-sm sm:text-base"
+              >
+                Contact Sales
+              </button>
             </div>
 
           </div>
         </div>
       </section>
 
-      <section className="py-24 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-black mb-12 text-center text-gray-900">Built for Indian Markets</h2>
+      {/* Testimonials */}
+      <section className="py-16 sm:py-24 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <h2 className="text-2xl sm:text-3xl font-black mb-8 sm:mb-12 text-center text-gray-900">Built for Indian Markets</h2>
           
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:border-blue-500 transition-colors">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">RE</div>
+          <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-3xl border border-slate-200 hover:border-blue-500 transition-colors">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0">RE</div>
                 <div>
-                  <h4 className="font-bold text-lg text-gray-900">Real Estate</h4>
-                  <p className="text-gray-500 text-sm">Managing 500+ site visits</p>
+                  <h4 className="font-bold text-base sm:text-lg text-gray-900">Real Estate</h4>
+                  <p className="text-gray-500 text-xs sm:text-sm">Managing 500+ site visits</p>
                 </div>
               </div>
-              <p className="text-gray-600 mb-6 italic">"I used to lose leads in my phonebook. With Thrivoy, I dump all inquiries from MagicBricks and 99acres into the engine. My conversion jumped 40% in month one."</p>
-              <div className="flex gap-3 text-sm font-bold text-gray-800 items-center">
-                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs">VS</div>
+              <p className="text-gray-600 mb-4 sm:mb-6 italic text-sm sm:text-base">"I used to lose leads in my phonebook. With Thrivoy, I dump all inquiries from MagicBricks and 99acres into the engine. My conversion jumped 40% in month one."</p>
+              <div className="flex gap-3 text-xs sm:text-sm font-bold text-gray-800 items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs flex-shrink-0">VS</div>
                 Vikram S., Property Consultant, Pune
               </div>
             </div>
 
-            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:border-green-500 transition-colors">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-green-600 text-white rounded-full flex items-center justify-center font-bold">INS</div>
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-3xl border border-slate-200 hover:border-green-500 transition-colors">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0">INS</div>
                 <div>
-                  <h4 className="font-bold text-lg text-gray-900">Insurance & Loans</h4>
-                  <p className="text-gray-500 text-sm">High volume calling</p>
+                  <h4 className="font-bold text-base sm:text-lg text-gray-900">Insurance & Loans</h4>
+                  <p className="text-gray-500 text-xs sm:text-sm">High volume calling</p>
                 </div>
               </div>
-              <p className="text-gray-600 mb-6 italic">"Speed is everything. I can call 50 people in an hour using the Queue mode. The AI rewriting my WhatsApp messages makes me look super professional."</p>
-              <div className="flex gap-3 text-sm font-bold text-gray-800 items-center">
-                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs">PM</div>
+              <p className="text-gray-600 mb-4 sm:mb-6 italic text-sm sm:text-base">"Speed is everything. I can call 50 people in an hour using the Queue mode. The AI rewriting my WhatsApp messages makes me look super professional."</p>
+              <div className="flex gap-3 text-xs sm:text-sm font-bold text-gray-800 items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs flex-shrink-0">PM</div>
                 Priya M., Financial Advisor, Mumbai
               </div>
             </div>
@@ -3583,7 +3610,8 @@ function LandingPage() {
         </div>
       </section>
 
-      <footer className="py-12 bg-gray-900 text-gray-400 text-center text-sm">
+      {/* Footer */}
+      <footer className="py-8 sm:py-12 bg-gray-900 text-gray-400 text-center text-xs sm:text-sm">
         <p>© 2025 Thrivoy. Built for hustlers who close.</p>
       </footer>
     </div>
