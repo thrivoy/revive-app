@@ -3344,7 +3344,7 @@ function LandingPage() {
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-black text-lg sm:text-xl tracking-tight">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg shadow-lg shadow-blue-200">Thrivoy</div>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center text-lg shadow-lg shadow-blue-200">T</div>
             Thrivoy
           </div>
           <button 
